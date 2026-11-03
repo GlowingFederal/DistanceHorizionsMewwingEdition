@@ -87,7 +87,11 @@ public class GLProxy
 	 * on older MC versions (James found this issue on 1.17 and 1.20.6 specifically),
 	 * but may still be accessible for our needs. 
 	 */
+	#if MC_VER == MC_1_7_10
+	private static final boolean CHECK_GL_VERSION_ON_STARTUP = true;
+	#else
 	private static final boolean CHECK_GL_VERSION_ON_STARTUP = false;
+	#endif
 	
 	public static final Set<String> LOGGED_GL_MESSAGES = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
 	

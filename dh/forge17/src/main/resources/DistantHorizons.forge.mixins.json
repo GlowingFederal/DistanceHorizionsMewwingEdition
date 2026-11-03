@@ -17,6 +17,7 @@
     "MixinBlock_SideFacingUnloadedChunk",
     "MixinEntityRenderer",
     "MixinFramebuffer",
+    "MixinIrisGenericRenderProgram",
     "MixinMinecraft",
     "MixinNetHandlerPlayClient",
     "MixinOptionsScreen",

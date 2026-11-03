@@ -39,6 +39,11 @@ public enum Mixins implements IMixins
         .addClientMixins("MixinBlock_SideFacingUnloadedChunk", "IMixinChunkCache_SideFacingUnloaded")
         .setPhase(Phase.EARLY)),
 	
+    CLIENT_ANGELICA_GENERIC_SHADER(
+        new MixinBuilder().setPhase(Phase.EARLY)
+        .addRequiredMod(TargetedMod.ANGELICA)
+        .addClientMixins("MixinIrisGenericRenderProgram")),
+
     CLIENT_FADE(
 		new MixinBuilder().setPhase(Phase.EARLY)
         .addExcludedMod(TargetedMod.ANGELICA)

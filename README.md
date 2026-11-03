@@ -18,46 +18,19 @@ Below is a video demonstrating the system:
 
 # Installation
 
-- Download the latest version from [DistantHorizonsStandalone Releases](https://github.com/DarkShadow44/DistantHorizonsStandalone/releases) and put it into the mods folder
+This backport targets Minecraft 1.7.10 with Forge 10.13.4.1614, Java 8, and Minecraft's original LWJGL 2.9.1 libraries. The graphics driver must support OpenGL 3.3 or newer.
 
-Make sure the latest versions of each of the dependencies are installed:
+Put this repository's production release JAR and [UniMixins](https://github.com/LegacyModdingMC/UniMixins) 0.2.1 or newer in the `mods` folder. Keep UniMixins' original leading `+` in its filename so its bootstrap loads before DH. Dedicated servers need the same two mods and Java 8; they do not need a graphics context.
 
-- [lwjgl3ify](https://github.com/GTNewHorizons/lwjgl3ify) - Use 3.0.15 or higher
-- [GTNHLib](https://github.com/GTNewHorizons/GTNHLib)
-- [UniMixins](https://github.com/LegacyModdingMC/UniMixins)
+Angelica is optional. To use its renderer or shader support, install [Angelica](https://github.com/GTNewHorizons/Angelica) and its required dependencies, including [GTNHLib](https://github.com/GTNewHorizons/GTNHLib). DH's integration requires Angelica 2.1.5 or newer. Shader packs must support Distant Horizons through the Iris shader interface.
 
-Now supports shaders when used with Angelica 2.1.12 or higher. Tested with [Complementary 5.7.1](https://modrinth.com/shader/complementary-reimagined/version/r5.7.1) with [Euphoria patches 1.8.6](https://modrinth.com/mod/euphoria-patches/version/1.8.6-r5.7.1-forge1.7.10)
-If it works with modern DH+Iris, but not with latest Angelica + DH, this should be reported as bug.
+This build selects its native LWJGL 2 backend directly. It does not require lwjgl3ify, LWJGL 3, or a RetroFuturaBootstrap launch setup. Install it in a normal Forge Java 8 instance.
 
 # Known Issues
 
-- Memory usage might creep up over time and crash the server
-- Server side not fully stable, use with caution
-- Sometimes LODs don't update properly, change rendering distance and then back to fix that (upstream issue)
-
-# GTNH 2.8.4
-
-Here detailed instructions how to get DH + latest Angelica working in GTNH 2.8.4 (you'll need to upgrade a few things) in Prism Launcher:
-
-Download the following mods:
-- Latest DH - tested with [alpha18](https://github.com/DarkShadow44/DistantHorizonsStandalone/releases/tag/alpha18) - get `distanthorizons-alpha18.jar`
-- Latest Angelica - tested with [2.1.16](https://github.com/GTNewHorizons/Angelica/releases/tag/2.1.16) - get `angelica-2.1.16.jar`
-- Latest lwjgl3ify - tested with [3.0.15](https://github.com/GTNewHorizons/lwjgl3ify/releases/tag/3.0.15) - get `lwjgl3ify-3.0.15.jar` and `lwjgl3ify-3.0.15-multimc.zip`
-- Latest GTNHLib - tested with [0.9.47](https://github.com/GTNewHorizons/GTNHLib/releases/tag/0.9.47) - get `gtnhlib-0.9.47.jar`
-
-From your mods folder delete
-- angelica-1.0.0-beta66b.jar
-- lwjgl3ify-2.1.16.jar
-- gtnhlib-0.7.10.jar
-
-Then add to your mods folder:
-- distanthorizons-alpha18.jar
-- angelica-2.1.16.jar
-- lwjgl3ify-3.0.15.jar
-- gtnhlib-0.9.47.jar
-
-Then unzip `lwjgl3ify-3.0.15-multimc.zip`, copy the contents into your Prism Launcher instance. You know you copy into the right folder when you overwrite your `mmc-pack.json`.
-
+- Distant terrain generation can take substantial time at large LOD distances. Areas outside completed coverage remain unavailable until generated or received from a DH server.
+- Server-side support remains under development; long-running stability depends on the modpack and generation settings.
+- Back up important worlds before changing development builds or modpacks.
 
 # Development
 
@@ -73,8 +46,11 @@ gtnh-dh/
 
 ## Build
 
+Run Gradle with a modern JDK (JDK 25 works with the pinned wrapper) and make a Java 8 toolchain available. The Forge sources compile with the Java 8 compiler, while the platform-neutral core targets Java 8 bytecode. Gradle and its test processes are separate from the Minecraft Java 8 runtime. The Forge `check` task verifies the remapped release's Java 8 bytecode and LWJGL 2 packaging.
+
 ```bash
-./gradlew build          # jars land in build/libs
+./gradlew :dh:forge17:check :dh:core:test :dh:api:test assemble
+# production and development JARs land in build/libs
 ```
 
 ## Working on a fix

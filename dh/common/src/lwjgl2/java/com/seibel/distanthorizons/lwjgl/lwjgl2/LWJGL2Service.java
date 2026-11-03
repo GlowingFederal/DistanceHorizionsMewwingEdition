@@ -575,12 +575,17 @@ public class LWJGL2Service implements ILWJGLService
 	@Override
 	public void glShaderSourceSafe(int shader, CharSequence source)
 	{
-		// AMD driver workaround: pass null for string length to force null-terminator reliance.
-		// Some AMD drivers don't receive or interpret the length correctly, resulting in an
-		// access violation when the driver tries to read past the string memory.
-		// In LWJGL2, we use the normal method which should be null-terminated aware.
+		// LWJGL 2.9.1's public binding supplies an explicit length. It cannot reproduce
+		// LWJGL 3's null-length-pointer AMD workaround; retain the supported binding.
 		ByteBuffer sourceBuffer = MemoryUtilities.memUTF8(source, true);
-		GL20.glShaderSource(shader, sourceBuffer);
+		try
+		{
+			GL20.glShaderSource(shader, sourceBuffer);
+		}
+		finally
+		{
+			MemoryUtilities.memFree(sourceBuffer);
+		}
 	}
 	
 	@Override

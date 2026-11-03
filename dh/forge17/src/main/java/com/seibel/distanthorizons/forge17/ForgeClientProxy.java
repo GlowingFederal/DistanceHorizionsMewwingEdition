@@ -30,6 +30,8 @@ import com.seibel.distanthorizons.core.api.internal.ClientApi;
 import com.seibel.distanthorizons.core.api.internal.ServerApi;
 import com.seibel.distanthorizons.core.api.internal.SharedApi;
 import com.seibel.distanthorizons.core.dependencyInjection.SingletonInjector;
+import com.seibel.distanthorizons.core.dependencyInjection.ModAccessorInjector;
+import com.seibel.distanthorizons.core.wrapperInterfaces.modAccessor.IAngelicaAccessor;
 import com.seibel.distanthorizons.core.logging.DhLogger;
 import com.seibel.distanthorizons.core.logging.DhLoggerBuilder;
 import com.seibel.distanthorizons.core.logging.f3.F3Screen;
@@ -168,6 +170,11 @@ public class ForgeClientProxy implements AbstractModInitializer.IEventProxy
     @SubscribeEvent
     public void afterLevelRenderEvent(TickEvent.RenderTickEvent event)
     {
+		// Angelica owns its framebuffer and already exposes a depth texture.
+		if (ModAccessorInjector.INSTANCE.get(IAngelicaAccessor.class) != null)
+		{
+			return;
+		}
 	    if (event.type.equals(TickEvent.RenderTickEvent.Type.RENDER))
 	    {
 		    boolean framebufferMixinWasEnabled = MixinFlags.framebufferMixinEnabled;

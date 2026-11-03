@@ -6,6 +6,6 @@ package com.seibel.distanthorizons.forge17;
  */
 public class MixinFlags 
 {
-	/** will be set to true if the mixin is applied */
+	/** Enable native depth-texture conversion after splash rendering has finished. */
     public static volatile boolean framebufferMixinEnabled = false;
 }

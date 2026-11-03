@@ -74,13 +74,6 @@ public class LodQuadTree extends QuadTree<LodRenderSection> implements IDebugRen
 	
 	private static final DebugWireframeHandler DEBUG_RENDERER = SingletonInjector.INSTANCE.get(DebugWireframeHandler.class);
 	
-	/**
-	 * How long the retrieval queue thread will sleep once it runs out of work 
-	 * before checking again for new tasks.
-	 */
-	private static final long QUEUE_THREAD_IDLE_WAIT_MS = 100L;
-	
-	
 	public final int blockRenderDistanceDiameter;
 	@WillNotClose
 	private final FullDataSourceProviderV2 fullDataSourceProvider;
@@ -509,36 +502,11 @@ public class LodQuadTree extends QuadTree<LodRenderSection> implements IDebugRen
 						}
 					}
 					
-					// Keep looping as long as there's something to queue.
-					// This allows really fast generators to remain fed.
-					while (!Thread.interrupted())
-					{
-						int missingPosCountBeforeQueuing = this.missingGenerationPosSet.size();
-						
-						this.startQueuedRetrievalTasks(playerPos);
-						
-						
-						boolean workRemaining = !this.missingGenerationPosSet.isEmpty();
-						if (!workRemaining)
-						{
-							// Nothing left to queue, the queuing thread can stop looking.
-							// The next tree tick will restart it when new work shows up.
-							break;
-						}
-						
-						boolean somethingQueued = this.missingGenerationPosSet.size() != missingPosCountBeforeQueuing;
-						if (!somethingQueued)
-						{
-							// there's work in the queue, but we weren't able to
-							// queue any of it this loop (generator queue is probably full)
-							// wait a moment then try again
-							try
-							{
-								Thread.sleep(QUEUE_THREAD_IDLE_WAIT_MS);
-							}
-							catch (InterruptedException e) { break; }
-						}
-					}
+					// Fill the available slots, then let the next tree tick collect
+					// newly loaded sections and the current player position. Waiting
+					// for this snapshot to drain starves those sections behind a
+					// potentially hours-long distant generation backlog.
+					this.startQueuedRetrievalTasks(playerPos);
 				}
 				catch (Exception e)
 				{
@@ -800,6 +768,13 @@ public class LodQuadTree extends QuadTree<LodRenderSection> implements IDebugRen
 			LodRenderSection renderSection = this.tryGetValue(pos);
 			if (renderSection != null)
 			{
+				// A neighbor can finish while this section's first mesh is still
+				// uploading. Retain that refresh even before a GPU buffer exists.
+				if (renderSection.gpuUploadInProgress())
+				{
+					positionsToRequeue.add(pos);
+					continue;
+				}
 				// the section only needs to be updated if a buffer is currently present 
 				if (renderSection.gpuUploadComplete())
 				{

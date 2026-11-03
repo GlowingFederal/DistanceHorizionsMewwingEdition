@@ -1,6 +1,7 @@
 package com.seibel.distanthorizons.core.multiplayer.fullData;
 
 import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.Cache;
 import com.seibel.distanthorizons.core.config.Config;
 import com.seibel.distanthorizons.core.logging.DhLogger;
 import com.seibel.distanthorizons.core.logging.DhLoggerBuilder;
@@ -11,7 +12,6 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 
 import java.util.Objects;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
 public class FullDataPayloadReceiver implements AutoCloseable
@@ -20,53 +20,68 @@ public class FullDataPayloadReceiver implements AutoCloseable
 			.fileLevelConfig(Config.Common.Logging.logNetworkEventToFile)
 			.build();
 	
-	private final ConcurrentMap<Integer, CompositeByteBuf> buffersById = CacheBuilder.newBuilder()
+	private final Cache<Integer, CompositeByteBuf> buffersById = CacheBuilder.newBuilder()
 		.expireAfterAccess(30, TimeUnit.SECONDS)
-			.<Integer, CompositeByteBuf>build().asMap();
+			.<Integer, CompositeByteBuf>removalListener(notification -> notification.getValue().release())
+			.<Integer, CompositeByteBuf>build();
+	private boolean closed;
 	
 	@Override
-	public void close()
+	public synchronized void close()
 	{
-		this.buffersById.clear();
+		this.closed = true;
+		this.buffersById.invalidateAll();
 	}
 	
-	public void receiveChunk(FullDataSplitMessage message)
+	public synchronized void receiveChunk(FullDataSplitMessage message)
 	{
-		this.buffersById.compute(message.bufferId, (bufferId, composite) ->
+		if (this.closed)
 		{
-			if (message.isFirst)
-			{
-				composite = Unpooled.compositeBuffer();
-				LOGGER.debug("Created new full data buffer [" + message.bufferId + "]: [" + composite + "]");
-			}
-			else if (composite == null)
-			{
-				LOGGER.debug("Received non-first full data chunk for empty buffer [" + message.bufferId + "]: [" + message.buffer + "].");
-				return null;
-			}
-			
-			message.buffer.readerIndex(0);
-			composite.addComponent(message.buffer);
-			composite.writerIndex(composite.writerIndex() + message.buffer.writerIndex());
-			LOGGER.debug("Updated full data buffer [" + message.bufferId + "]: [" + composite + "].");
-			return composite;
-		});
+			message.buffer.release();
+			return;
+		}
+		CompositeByteBuf composite = this.buffersById.getIfPresent(message.bufferId);
+		if (message.isFirst)
+		{
+			composite = Unpooled.compositeBuffer();
+			this.buffersById.put(message.bufferId, composite);
+			LOGGER.debug("Created new full data buffer [" + message.bufferId + "]: [" + composite + "]");
+		}
+		else if (composite == null)
+		{
+			LOGGER.debug("Received non-first full data chunk for empty buffer [" + message.bufferId + "]: [" + message.buffer + "].");
+			message.buffer.release();
+			return;
+		}
+
+		// Do not replace the cache entry when appending: legacy Guava's Java 8
+		// Map.compute default reports even the same value as a removed entry.
+		message.buffer.readerIndex(0);
+		composite.addComponent(message.buffer);
+		composite.writerIndex(composite.writerIndex() + message.buffer.writerIndex());
+		LOGGER.debug("Updated full data buffer [" + message.bufferId + "]: [" + composite + "].");
 	}
 	
-	public FullDataSourceV2DTO decodeDataSource(FullDataPayload payload)
+	// Cache eviction and close must not release a buffer while it is being decoded.
+	public synchronized FullDataSourceV2DTO decodeDataSource(FullDataPayload payload)
 	{
-		CompositeByteBuf compositeByteBuffer = this.buffersById.get(payload.dtoBufferId);
+		CompositeByteBuf compositeByteBuffer = this.buffersById.getIfPresent(payload.dtoBufferId);
 		Objects.requireNonNull(compositeByteBuffer, "Unable to get a complete buffer for a received payload. Ignore this if it doesn't spam similar errors");
 		
+		FullDataSourceV2DTO dataSourceDto = FullDataSourceV2DTO.CreateEmptyDataSourceForDecoding();
 		try
 		{
-			FullDataSourceV2DTO dataSourceDto = INetworkObject.decodeToInstance(FullDataSourceV2DTO.CreateEmptyDataSourceForDecoding(), compositeByteBuffer);
-			return dataSourceDto;
+			return INetworkObject.decodeToInstance(dataSourceDto, compositeByteBuffer);
+		}
+		catch (RuntimeException | Error e)
+		{
+			dataSourceDto.close();
+			throw e;
 		}
 		finally
 		{
 			// Releasing the buffer is handled by cache
-			this.buffersById.remove(payload.dtoBufferId);
+			this.buffersById.invalidate(payload.dtoBufferId);
 		}
 	}
 	

@@ -52,7 +52,7 @@ import cpw.mods.fml.relauncher.Side;
  * If you are looking for the real start of the mod
  * check out the ClientProxy.
  */
-@Mod(modid = "distanthorizons", name = "DistantHorizons", dependencies = "after:angelica;", acceptableRemoteVersions = "*")
+@Mod(modid = "distanthorizons", name = "DistantHorizons", dependencies = "required-after:unimixins@[0.2.1,);after:angelica;", acceptableRemoteVersions = "*")
 public class ForgeMain extends AbstractModInitializer implements IForgeMain
 {
 

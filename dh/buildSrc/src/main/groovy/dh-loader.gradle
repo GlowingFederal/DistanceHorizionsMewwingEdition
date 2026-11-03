@@ -173,7 +173,7 @@ if (isNotCommonProject) {
             attributes(
                 'Implementation-Title': rootProject.mod_name,
                 'Implementation-Version': rootProject.mod_version,
-                'Multi-Release': true,
+                'Multi-Release': project.name != "forge17",
                 'Main-Class': 'com.seibel.distanthorizons.core.jar.JarMain',
             )
             if (project.name == "forge112") {
@@ -189,8 +189,7 @@ if (isNotCommonProject) {
                     'FMLCorePlugin': 'com.seibel.distanthorizons.DistantHorizonsTweaker',
                     'FMLCorePluginContainsFMLMod': true,
                     'FMLAT': "${gradle.ext.accessWidenerVersion}.distanthorizons_at.cfg",
-                    'ForceLoadAsMod': true,
-                    "Lwjgl3ify-Aware": true
+                    'ForceLoadAsMod': true
                 )
             }
         }
@@ -245,7 +244,12 @@ if (isNotCommonProject) {
 
     tasks.withType(JavaCompile).configureEach {
         source(project(":common").sourceSets.main.allSource)
-        source(project(":common").sourceSets.lwjglCommon.allSource)
+        // Forge 1.7.10 supplies a provider bound to Minecraft's native LWJGL 2.
+        source(project(":common").sourceSets.lwjglCommon.allSource.matching {
+            if (project.name == "forge17") {
+                exclude "com/seibel/distanthorizons/lwjgl/LWJGLServiceProvider.java"
+            }
+        })
         source(project(":common").sourceSets."${lwjglVersion}".allSource)
     }
     
@@ -253,7 +257,7 @@ if (isNotCommonProject) {
         implementation(project(":common"))
     }
 
-    if (isLegacyLwjgl) {
+    if (isLegacyLwjgl && project.name != "forge17") {
         def lwjgl3Classes = files(project(":common").sourceSets.lwjgl3.output.classesDirs)
         lwjgl3Classes.builtBy(project(":common").tasks.named("compileLwjgl3Java"))
 
@@ -346,7 +350,9 @@ if (!isNotCommonProject) {
         from(rootProject.file("COPYING.LESSER"))
         from(sourceSets.lwjglCommon.output)
         from(sourceSets.lwjgl2.output)
-        from(sourceSets.lwjgl3.output)
+        if (rootProject.minecraft_version != "1.7.10") {
+            from(sourceSets.lwjgl3.output)
+        }
         manifest {
             attributes([
                 "Lwjgl3ify-Aware": "true"
@@ -815,6 +821,15 @@ if (isNotCommonProject) {
     jvmdg.downgradeTo = JavaVersion.toVersion(rootProject.java_version)
     downgradeJar.archiveClassifier.set(null)
     shadeDowngradedApi.archiveClassifier.set(null)
+
+    if (project.name == "forge17") {
+        // This target is compiled for Java 8 already. These plugin-added assemble
+        // tasks must neither overwrite remapJar nor claim the same release output.
+        downgradeJar.enabled = false
+        downgradeJar.archiveClassifier.set("unused-downgraded")
+        shadeDowngradedApi.enabled = false
+        shadeDowngradedApi.archiveClassifier.set("unused-downgraded-api")
+    }
 
     if (project.ext.needsDowngrade) {
         gradle.taskGraph.whenReady { graph ->

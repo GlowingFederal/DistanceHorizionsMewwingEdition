@@ -281,9 +281,20 @@ public class ColumnBox
 		
 		color = ColorUtil.applyShade(color, clientLevelWrapper.getShade(direction));
 		
-		if (adjColumnView.size == 0
-			|| RenderDataPointUtil.hasZeroHeight(adjColumnView.get(0)))
+		// Missing data is unknown terrain, not air. Closing a partially generated
+		// section against it invents cliffs down to bedrock at the coverage edge.
+		if (adjColumnView.size == 0)
 		{
+			return;
+		}
+		if (RenderDataPointUtil.hasZeroHeight(adjColumnView.get(0)))
+		{
+			// A known air-only column has an explicit void datapoint. Keep its side
+			// faces (for example End islands); an ungenerated column has none.
+			if (!RenderDataPointUtil.doesDataPointExist(adjColumnView.getVoid()))
+			{
+				return;
+			}
 			builder.addQuadAdj(
 				direction, 
 				x, yMin, z, 

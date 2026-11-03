@@ -187,8 +187,9 @@ public class ServerLevelWrapper implements IServerLevelWrapper
 			// We use the overworld since it's the only dimension that is stored in the server root folder
 			
 			#if MC_VER <= MC_1_7_10
-			return net.minecraft.server.MinecraftServer.getServer().worldServers[0]
-				.getSaveHandler().getWorldDirectory().getParentFile().getName();
+			// All dimensions share the root save handler. Chunk callbacks can arrive
+			// while the overworld is still being constructed and worldServers is empty.
+			return this.level.getSaveHandler().getWorldDirectory().getParentFile().getName();
 			#elif MC_VER <= MC_1_12_2
 			return this.level.getMinecraftServer().getWorld(0).getSaveHandler().getWorldDirectory().getParentFile().getName();
 			#elif MC_VER >= MC_1_21_3

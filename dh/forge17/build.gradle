@@ -7,6 +7,10 @@ repositories {
     maven {
         name "GTNH Maven"
         url "https://nexus.gtnewhorizons.com/repository/public/" // UniMixins
+        content {
+            includeGroup "com.github.GTNewHorizons"
+            includeGroup "io.github.legacymoddingmc"
+        }
     }
     maven {
         name = "mavenpattern"
@@ -45,6 +49,12 @@ dependencies {
 
 // ==================== Tasks ====================
 
+shadowJar {
+    // Forge 1.7.10's ASM 5 scanner inspects every class, including multi-release
+    // entries that a Java 8 JVM itself would ignore. Keep only the Java 8 variants.
+    exclude 'META-INF/versions/**', '**/module-info.class'
+}
+
 task deleteResources(type: Delete) {
     delete file("build/resources/main")
 }
@@ -68,5 +78,68 @@ tasks.named('runClient') {
 sourcesJar {
     def commonSources = project(":common").sourcesJar
     dependsOn commonSources
-    from commonSources.archiveFile.map { zipTree(it) }
+    from(commonSources.archiveFile.map { zipTree(it) }) {
+        exclude "com/seibel/distanthorizons/lwjgl/LWJGLServiceProvider.java"
+    }
 }
+
+// Guard the standalone legacy release boundary, including bundled libraries.
+tasks.register('verifyLegacyJar') {
+    group = 'verification'
+    description = 'Verify Java 8 bytecode and native LWJGL 2-only release packaging.'
+    dependsOn tasks.named('remapJar')
+    inputs.file(tasks.named('remapJar').flatMap { it.archiveFile })
+    doLast {
+        def forbiddenDependencies = configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.findAll {
+            def id = it.moduleVersion.id
+            id.group == 'org.lwjgl' || (id.name.toLowerCase() =~ /lwjgl3ify|glfw|retrofuturabootstrap/).find()
+        }
+        if (!forbiddenDependencies.empty) {
+            throw new GradleException("Unexpected legacy runtime dependencies: ${forbiddenDependencies}")
+        }
+
+        def release = tasks.named('remapJar').get().archiveFile.get().asFile
+        new java.util.jar.JarFile(release).withCloseable { jar ->
+            def names = jar.entries().collect { it.name }
+            def forbidden = names.findAll {
+                it.startsWith('org/lwjgl/') || it.contains('/lwjgl/lwjgl3/') ||
+                    it.toLowerCase().contains('glfw') || it.toLowerCase().contains('lwjgl3ify') ||
+                    it.contains('retrofuturabootstrap')
+            }
+            if (!forbidden.empty) {
+                throw new GradleException("Unexpected LWJGL/bootstrap payload: ${forbidden}")
+            }
+            names.findAll {
+                it.endsWith('.class')
+            }.each { name ->
+                jar.getInputStream(jar.getJarEntry(name)).withCloseable { stream ->
+                    def data = new DataInputStream(stream)
+                    if (data.readInt() != (int) 0xCAFEBABE) {
+                        throw new GradleException("Invalid class: ${name}")
+                    }
+                    data.readUnsignedShort()
+                    int major = data.readUnsignedShort()
+                    if (major > 52) {
+                        throw new GradleException("Java 8 cannot load ${name} (class version ${major})")
+                    }
+                }
+            }
+            [
+                'com/seibel/distanthorizons/lwjgl/lwjgl2/LWJGL2Service.class',
+                'com/seibel/distanthorizons/lwjgl/LWJGLServiceProvider.class',
+                'DistantHorizons.forge.mixins.json',
+                'DistantHorizons.forge.mixins-refmap.json',
+                'META-INF/1_7_10.distanthorizons_at.cfg',
+                'dh_sqlite/native/Windows/x86_64/sqlitejdbc.dll',
+                "win/amd64/libzstd-jni_dh-${rootProject.zstd_version}.dll"
+            ].each { required ->
+                if (!names.contains(required.toString())) {
+                    throw new GradleException("Missing legacy release resource: ${required}")
+                }
+            }
+            logger.lifecycle("Verified Java 8 / native LWJGL 2 release: ${release}")
+        }
+    }
+}
+
+tasks.named('check') { dependsOn tasks.named('verifyLegacyJar') }
