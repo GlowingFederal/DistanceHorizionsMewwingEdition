@@ -27,6 +27,29 @@ java {
     withSourcesJar()
 }
 
+// Brand the legacy distribution from Gradle's version properties, leaving the
+// upstream source and all protocol/configuration/API constants intact.
+if (rootProject.minecraft_version == '1.7.10') {
+    def originalModInfo = file('src/main/java/com/seibel/distanthorizons/coreapi/ModInfo.java')
+    def generateJava8ModInfo = tasks.register('generateJava8ModInfo', Sync) {
+        inputs.property('editionName', rootProject.java8_edition_name)
+        inputs.property('editionVersion', rootProject.java8EditionVersion)
+        from('src/main/java') { include 'com/seibel/distanthorizons/coreapi/ModInfo.java' }
+        into layout.buildDirectory.dir('generated/sources/java8Edition')
+        filter { String line ->
+            if (line.contains('public static final String READABLE_NAME =')) {
+                return "\tpublic static final String READABLE_NAME = \"${rootProject.java8_edition_name}\";"
+            }
+            if (line.contains('public static final String VERSION =')) {
+                return "\tpublic static final String VERSION = \"${rootProject.java8EditionVersion}\";"
+            }
+            return line
+        }
+    }
+    sourceSets.main.java.exclude { it.file == originalModInfo }
+    sourceSets.main.java.srcDir(generateJava8ModInfo)
+}
+
 task createReleaseApiJar(type: ShadowJar) {
 
     mustRunAfter sourcesJar

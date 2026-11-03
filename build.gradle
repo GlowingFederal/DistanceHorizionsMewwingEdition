@@ -6,19 +6,17 @@ def dhBuild = gradle.includedBuild('dh')
 def dhProps = new Properties()
 file('dh/gradle.properties').withInputStream { dhProps.load(it) }
 
-gtnhGradle.applyModuleByName(project, 'GitVersionModule')
-
 group = modGroup
-version = version.toString().replaceFirst(/^v/, '')
+version = "${dhProps.mod_version}-java8-native.${dhProps.java8_port_version}"
 ext.modVersion = version.toString()
 
-def sourceName = "${modName}-${dhLoader}-${dhProps.mod_version}-${minecraftVersion}"
+def sourceName = "${modName}-${dhProps.mod_version}-java8-native-${dhProps.java8_port_version}-${minecraftVersion}"
 
 // The publishers want TaskProvider<Jar>, but the jars are DH's -- clear Jar's own
 // packaging action and copy them byte-for-byte instead.
 def registerJarCopy = { String taskName, FileCollection source, String classifier ->
     tasks.register(taskName, Jar) {
-        archiveFileName.set("${modName}-${version}${classifier}.jar")
+        archiveFileName.set("${sourceName}${classifier}.jar")
         inputs.files(source)
 
         actions.clear()
@@ -72,8 +70,14 @@ tasks.named('assemble') {
     setDependsOn([])
     dependsOn collectJars, collectDevJars
 }
-tasks.named('check') { dependsOn dhBuild.task(":${dhLoader}:check") }
-tasks.named('clean') { dependsOn dhBuild.task(':clean') }
+tasks.named('check') {
+    // This wrapper has no sources/tests; verification belongs to the DH build.
+    setDependsOn([])
+    dependsOn dhBuild.task(":${dhLoader}:check"), dhBuild.task(':core:test'), dhBuild.task(':api:test')
+}
+tasks.named('clean') {
+    dependsOn dhBuild.task(':clean'), dhBuild.task(":${dhLoader}:clean")
+}
 
 // Keep RFG from preparing Minecraft for this source-less wrapper project.
 ['compileClasspath', 'testCompileClasspath', 'runtimeClasspath', 'testRuntimeClasspath'].each { name ->

@@ -8,6 +8,10 @@ project.gradle.ext.getProperties().each { prop ->
 }
 
 // Version string for archives
+if (rootProject.minecraft_version == '1.7.10') {
+    rootProject.ext.java8EditionVersion = "${rootProject.mod_version}-java8-native.${rootProject.java8_port_version}"
+    rootProject.ext.java8EditionArchiveName = "${rootProject.mod_name}-${rootProject.mod_version}-java8-native-${rootProject.java8_port_version}-${rootProject.minecraft_version}"
+}
 rootProject.ext.versionStr = rootProject.mod_version + "-" + rootProject.minecraft_version
 rootProject.allprojects {
     version = (it == rootProject ? "" : it.name + "-") + rootProject.versionStr

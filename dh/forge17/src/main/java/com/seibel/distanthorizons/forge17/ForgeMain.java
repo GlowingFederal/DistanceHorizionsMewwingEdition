@@ -32,6 +32,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.ForgeChunkManager;
 
 import com.seibel.distanthorizons.common.AbstractModInitializer;
+import com.seibel.distanthorizons.coreapi.ModInfo;
 import com.seibel.distanthorizons.common.util.threading.ServerThreadTaskHandler;
 import com.seibel.distanthorizons.core.api.internal.ServerApi;
 import com.seibel.distanthorizons.core.dependencyInjection.SingletonInjector;
@@ -52,7 +53,7 @@ import cpw.mods.fml.relauncher.Side;
  * If you are looking for the real start of the mod
  * check out the ClientProxy.
  */
-@Mod(modid = "distanthorizons", name = "DistantHorizons", dependencies = "required-after:unimixins@[0.2.1,);after:angelica;", acceptableRemoteVersions = "*")
+@Mod(modid = "distanthorizons", name = ModInfo.READABLE_NAME, version = ModInfo.VERSION, dependencies = "required-after:unimixins@[0.2.1,);after:angelica;", acceptableRemoteVersions = "*")
 public class ForgeMain extends AbstractModInitializer implements IForgeMain
 {
 

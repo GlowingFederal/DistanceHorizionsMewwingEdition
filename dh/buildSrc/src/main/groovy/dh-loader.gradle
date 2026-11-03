@@ -171,8 +171,8 @@ if (isNotCommonProject) {
         from "LICENSE.txt"
         manifest {
             attributes(
-                'Implementation-Title': rootProject.mod_name,
-                'Implementation-Version': rootProject.mod_version,
+                'Implementation-Title': project.name == 'forge17' ? rootProject.java8_edition_name : rootProject.mod_name,
+                'Implementation-Version': project.name == 'forge17' ? rootProject.java8EditionVersion : rootProject.mod_version,
                 'Multi-Release': project.name != "forge17",
                 'Main-Class': 'com.seibel.distanthorizons.core.jar.JarMain',
             )
@@ -190,6 +190,11 @@ if (isNotCommonProject) {
                     'FMLCorePluginContainsFMLMod': true,
                     'FMLAT': "${gradle.ext.accessWidenerVersion}.distanthorizons_at.cfg",
                     'ForceLoadAsMod': true
+                )
+                attributes(
+                    'DH-Upstream-Version': rootProject.mod_version,
+                    'Java8-Port-Version': rootProject.java8_port_version,
+                    'Java8-Release-Channel': rootProject.java8_release_channel
                 )
             }
         }
@@ -720,12 +725,12 @@ if (isNotCommonProject) {
         }
 
         def replaceProperties = [
-            version                      : rootProject.mod_version,
+            version                      : project.name == 'forge17' ? rootProject.java8EditionVersion : rootProject.mod_version,
             mod_id                       : rootProject.mod_id,
-            mod_name                     : rootProject.mod_readable_name,
+            mod_name                     : project.name == 'forge17' ? rootProject.java8_edition_name : rootProject.mod_readable_name,
             group                        : rootProject.maven_group,
             authors                      : rootProject.mod_authors,
-            description                  : rootProject.mod_description,
+            description                  : project.name == 'forge17' ? 'An unofficial native Java 8 / LWJGL 2 port of Distant Horizons for Minecraft Forge 1.7.10.' : rootProject.mod_description,
             homepage                     : rootProject.mod_homepage,
             source                       : rootProject.mod_source,
             issues                       : rootProject.mod_issues,

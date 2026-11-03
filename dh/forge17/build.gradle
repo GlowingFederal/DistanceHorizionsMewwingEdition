@@ -49,6 +49,11 @@ dependencies {
 
 // ==================== Tasks ====================
 
+// Only the remapped JAR is installable. Keep all intermediate/dev archives distinct.
+tasks.named('remapJar') {
+    archiveFileName.set("${rootProject.java8EditionArchiveName}.jar")
+}
+
 shadowJar {
     // Forge 1.7.10's ASM 5 scanner inspects every class, including multi-release
     // entries that a Java 8 JVM itself would ignore. Keep only the Java 8 variants.
@@ -99,7 +104,30 @@ tasks.register('verifyLegacyJar') {
         }
 
         def release = tasks.named('remapJar').get().archiveFile.get().asFile
+        if (release.name != "${rootProject.java8EditionArchiveName}.jar") {
+            throw new GradleException("Unexpected production filename: ${release.name}")
+        }
         new java.util.jar.JarFile(release).withCloseable { jar ->
+            def metadata = new groovy.json.JsonSlurper().parse(jar.getInputStream(jar.getJarEntry('mcmod.info')))[0]
+            if (metadata.modid != rootProject.mod_id || metadata.name != rootProject.java8_edition_name ||
+                metadata.version != rootProject.java8EditionVersion || metadata.mcversion != rootProject.minecraft_version) {
+                throw new GradleException("Unexpected Forge release metadata: ${metadata}")
+            }
+            [
+                'Implementation-Title': rootProject.java8_edition_name,
+                'Implementation-Version': rootProject.java8EditionVersion,
+                'DH-Upstream-Version': rootProject.mod_version,
+                'Java8-Port-Version': rootProject.java8_port_version,
+                'Java8-Release-Channel': rootProject.java8_release_channel,
+                'FMLCorePlugin': 'com.seibel.distanthorizons.DistantHorizonsTweaker',
+                'FMLCorePluginContainsFMLMod': 'true',
+                'ForceLoadAsMod': 'true',
+                'FMLAT': '1_7_10.distanthorizons_at.cfg'
+            ].each { key, expected ->
+                if (jar.manifest.mainAttributes.getValue(key) != expected.toString()) {
+                    throw new GradleException("Unexpected manifest attribute ${key}")
+                }
+            }
             def names = jar.entries().collect { it.name }
             def forbidden = names.findAll {
                 it.startsWith('org/lwjgl/') || it.contains('/lwjgl/lwjgl3/') ||
@@ -130,12 +158,19 @@ tasks.register('verifyLegacyJar') {
                 'DistantHorizons.forge.mixins.json',
                 'DistantHorizons.forge.mixins-refmap.json',
                 'META-INF/1_7_10.distanthorizons_at.cfg',
+                'LICENSE.txt',
+                'LICENSE.LESSER.txt',
+                'LICENSE-LOGOS.txt',
                 'dh_sqlite/native/Windows/x86_64/sqlitejdbc.dll',
                 "win/amd64/libzstd-jni_dh-${rootProject.zstd_version}.dll"
             ].each { required ->
                 if (!names.contains(required.toString())) {
                     throw new GradleException("Missing legacy release resource: ${required}")
                 }
+            }
+            def refmap = new groovy.json.JsonSlurper().parse(jar.getInputStream(jar.getJarEntry('DistantHorizons.forge.mixins-refmap.json')))
+            if (!refmap.mappings) {
+                throw new GradleException('Empty release mixin refmap')
             }
             logger.lifecycle("Verified Java 8 / native LWJGL 2 release: ${release}")
         }

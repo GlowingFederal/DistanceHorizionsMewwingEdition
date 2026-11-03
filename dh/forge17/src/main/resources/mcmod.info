@@ -5,8 +5,8 @@
     "mcversion": "1.7.10",
     "description": "${description}",
     "authorList": ${authors},
-    "credits": "",
-    "url": "",
+    "credits": "Based on Distant Horizons and the GTNewHorizons Minecraft 1.7.10 backport. Unofficial fork; see README.md and the included license notices.",
+    "url": "https://github.com/GlowingFederal/DistanceHorizionsMewwingEdition",
     "updateJSON": "",
     "logoFile": "${logo_path}"
 }]
