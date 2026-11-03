@@ -1128,12 +1128,10 @@ public class FullDataSourceV2
 				// a separate generation step needs to be used so can replace
 				// this data with higher-quality data when it is available
 				byte inputGenStep = EDhApiWorldGenerationStep.DOWN_SAMPLED.value;
-				this.columnGenerationSteps.set(recipientIndex, inputGenStep);
 				
 				
 				// world compression //
-				byte worldCompressionMode = inputDataSource.columnWorldCompressionMode.getByte(recipientIndex);
-				this.columnWorldCompressionMode.set(recipientIndex, worldCompressionMode);
+				byte worldCompressionMode = inputDataSource.columnWorldCompressionMode.getByte(inputIndex);
 				
 				
 				
@@ -1160,6 +1158,10 @@ public class FullDataSourceV2
 				
 				if (downSampleColumn)
 				{
+					// Preserve the provenance of existing detailed columns. Downgrading
+					// their metadata would allow a later coarse update to replace them.
+					this.columnGenerationSteps.set(recipientIndex, inputGenStep);
+					this.columnWorldCompressionMode.set(recipientIndex, worldCompressionMode);
 					LongArrayList inputDataArray = inputDataSource.dataPoints[inputIndex];
 					
 					// copy over the new data, this is necessary to prevent remapping issues

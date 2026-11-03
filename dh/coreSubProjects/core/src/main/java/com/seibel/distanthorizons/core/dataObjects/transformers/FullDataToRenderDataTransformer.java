@@ -181,7 +181,7 @@ public class FullDataToRenderDataTransformer
 		if (fullDataLength <= columnArrayView.maxVerticalSliceCount)
 		{
 			// Directly use the arrayView since it fits.
-			setRenderColumnView(levelWrapper, fullDataSource, blockX, blockZ, columnArrayView, fullDataColumn, mutableBlockPos);
+			setRenderColumnView(levelWrapper, fullDataSource, blockX, blockZ, columnArrayView, fullDataColumn, mutableBlockPos, true);
 		}
 		else
 		{
@@ -192,7 +192,7 @@ public class FullDataToRenderDataTransformer
 			tempExpandingColumnView.populate(
 				dataArrayList, voidDataArrayList,
 				fullDataLength, 0, 0, fullDataLength);
-			setRenderColumnView(levelWrapper, fullDataSource, blockX, blockZ, tempExpandingColumnView, fullDataColumn, mutableBlockPos);
+			setRenderColumnView(levelWrapper, fullDataSource, blockX, blockZ, tempExpandingColumnView, fullDataColumn, mutableBlockPos, false);
 			
 			columnArrayView.changeVerticalSizeFrom(tempExpandingColumnView, reducingList);
 		}
@@ -288,7 +288,8 @@ public class FullDataToRenderDataTransformer
 	private static void setRenderColumnView(
 			IClientLevelWrapper levelWrapper, FullDataSourceV2 fullDataSource,
 			int blockX, int blockZ,
-			ColumnRenderView renderColumnData, LongArrayList fullColumnData, DhBlockPosMutable mutableBlockPos)
+			ColumnRenderView renderColumnData, LongArrayList fullColumnData, DhBlockPosMutable mutableBlockPos,
+			boolean preserveSurfaceTint)
 	{
 		//===============//
 		// config values //
@@ -350,6 +351,9 @@ public class FullDataToRenderDataTransformer
 		// there are several instances where we'll want
 		// to copy the top datapoint down and override the one below it
 		int colorToApplyToNextBlock = -1;
+		// Decorations tint only the surface block, not an arbitrarily tall RLE segment.
+		// Snow/water replacements retain their existing treatment.
+		boolean limitTintToSurface = false;
 		IBlockStateWrapper blockToApplyToNextBlock = null;
 		int skylightToApplyToNextBlock = -1;
 		int blocklightToApplyToNextBlock = -1;
@@ -431,6 +435,7 @@ public class FullDataToRenderDataTransformer
 				// doing so can cause weird lighting behavior for cave berries
 				// when hanging above water
 				colorToApplyToNextBlock = -1;
+				limitTintToSurface = false;
 				blockToApplyToNextBlock = null;
 				skylightToApplyToNextBlock = -1;
 				blocklightToApplyToNextBlock = -1;
@@ -583,13 +588,17 @@ public class FullDataToRenderDataTransformer
 				int ignoredColor = levelWrapper.getBlockColor(mutableBlockPos, biome, fullDataSource, block);
 				int ignoredAlpha = ColorUtil.getAlpha(ignoredColor);
 				
-				if (colorBelowWithAvoidedBlocks)
+				// A decorative color must not become the representative color of a
+				// horizontally enlarged column or a vertically reduced terrain segment.
+				if (colorBelowWithAvoidedBlocks && (isSnowLayer || isWaterSurfaceReplacement
+					|| (preserveSurfaceTint && fullDataSource.getDataDetailLevel() == 0)))
 				{
 					// don't transfer the color when alpha is 0
 					// this prevents issues if grass is transparent
 					if (ignoredAlpha != 0)
 					{
 						colorToApplyToNextBlock = ColorUtil.setAlpha(ignoredColor, 255);
+						limitTintToSurface = !isSnowLayer && !isWaterSurfaceReplacement;
 						// also copy over the material so shaders/textures render correctly
 						blockToApplyToNextBlock = block;
 					}
@@ -626,6 +635,11 @@ public class FullDataToRenderDataTransformer
 			}
 			
 			
+			IBlockStateWrapper terrainBlock = block;
+			int terrainColor = limitTintToSurface && colorToApplyToNextBlock != -1 && blockHeight > 1
+				? levelWrapper.getBlockColor(mutableBlockPos, biome, fullDataSource, block) : 0;
+			boolean splitSurfaceTint = limitTintToSurface && colorToApplyToNextBlock != -1 && blockHeight > 1;
+			limitTintToSurface = false;
 			int color;
 			// use the override values if necessary
 			if (colorToApplyToNextBlock == -1)
@@ -683,12 +697,29 @@ public class FullDataToRenderDataTransformer
 			
 			
 			
+			if (splitSurfaceTint)
+			{
+				// Each extra surface point replaces an ignored decoration point, so the
+				// output still fits in fullColumnData.size() slots. Keep the normal vertical
+				// reducer and its configured budget; no extra world generation is needed.
+				int surfaceBottom = bottomY + blockHeight - 1;
+				renderColumnData.set(renderDataIndex++, RenderDataPointUtil.createDataPoint(
+					surfaceBottom + 1, surfaceBottom, color, skyLight, blockLight, block.getMaterialId()));
+				isColumnVoid = false;
+				lastColor = color;
+				lastBottom = surfaceBottom;
+				blockHeight--;
+				color = terrainColor;
+				block = terrainBlock;
+			}
+
 			//=============================//
 			// merge same-colored adjacent //
 			//=============================//
 			
 			// check if they share a top-bottom face and if they have same color
-			if (color == lastColor 
+			if (!splitSurfaceTint // keep the terrain's material even if the decoration has the same color
+				&& color == lastColor
 				&& bottomY + blockHeight == lastBottom  
 				&& renderDataIndex > 0)
 			{

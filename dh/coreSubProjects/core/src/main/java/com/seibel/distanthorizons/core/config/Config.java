@@ -912,7 +912,8 @@ public class Config
 						.comment(""
 							+ "Should the blocks underneath avoided blocks gain the color of the avoided block? \n"
 							+ "\n"
-							+ "True: a red flower will tint the grass below it red. \n"
+							+ "True: a red flower will tint the surface block below it red at block-level detail. \n"
+							+ "Decorative tinting is skipped on coarser or vertically reduced columns to preserve terrain colors. \n"
 							+ "False: skipped blocks will not change color of surface below them. "
 							+ "")
 						.addListener(ReloadLodsConfigEventHandler.DELAYED_INSTANCE)

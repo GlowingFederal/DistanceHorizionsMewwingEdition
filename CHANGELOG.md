@@ -9,3 +9,8 @@
 - Refresh generation candidates after filling the available queue slots. Previously, one early snapshot could starve newly loaded nearby sections behind a large distant backlog. Preserve saved LOD data and existing generation settings.
 - Treat unknown adjacent terrain separately from confirmed air when building LOD sides, preventing artificial coverage-edge cliffs while retaining real cliffs and island sides. Retain neighbor refreshes that arrive during the first mesh upload.
 - Release assembled network payload buffers after decoding, replacement, expiration, and shutdown, including orphaned or late fragments. Serialize buffer ownership changes against decoding and close partially decoded data on failure.
+
+2026-11-03 10:27 — Bound vegetation tinting and preserve refined column metadata
+
+- Keep colors transferred from ignored flowers, grass, vines, and other decorations on the top block of block-resolution LOD columns. Retain the underlying terrain color and material down exposed cliffs instead of repainting an entire vertically compressed segment. Skip decorative tint transfer when horizontal or vertical simplification cannot preserve that surface layer; keep the existing tint setting, inclusion setting, biome colors, leaves, and snow/water replacement behavior.
+- Preserve generation and compression metadata when coarse fallback data leaves an existing detailed column untouched. Read fallback compression metadata from the sampled parent column, preventing coarse propagation from relabeling detailed data or using an unrelated column's compression mode. Existing databases and generation priorities remain compatible.
