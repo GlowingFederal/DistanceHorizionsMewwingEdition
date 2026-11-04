@@ -294,7 +294,28 @@ public class ClientBlockStateTextureCache
 	{
 		#if MC_VER <= MC_1_7_10
 		TextureAtlasSprite sprite = getFaceSprite(blockStateWrapper, dhDirection);
-		return bakeSpriteTexture(sprite);
+		boolean leaves = blockStateWrapper.blockState != null
+			&& (blockStateWrapper.blockState.getBlock() instanceof net.minecraft.block.BlockLeavesBase
+				|| blockStateWrapper.blockState.getMaterial() == net.minecraft.block.material.Material.leaves);
+		if (leaves && sprite != null && sprite.getIconName().endsWith("_opaque"))
+		{
+			String name = sprite.getIconName();
+			TextureAtlasSprite fancy = TextureAtlasSpriteWrapper.findBlockAtlasSprite(name.substring(0, name.length() - 7));
+			if (fancy != null) sprite = fancy;
+		}
+		BlockFaceTexture texture = bakeSpriteTexture(sprite);
+		if (leaves)
+		{
+			// Retro's 254-alpha marker distinguishes leaf gaps from other cutout blocks.
+			// It stays in the opaque pass; the fragment shader decides whether to cut it out.
+			for (int i = 0; i < texture.argbPixels.length; i++)
+			{
+				if (ColorUtil.getAlpha(texture.argbPixels[i]) < 128)
+					texture.argbPixels[i] = ColorUtil.argbToInt(254, 44, 44, 44);
+				else texture.argbPixels[i] = ColorUtil.setAlpha(texture.argbPixels[i], 255);
+			}
+		}
+		return texture;
 		
 		#else
 		
@@ -836,6 +857,13 @@ public class ClientBlockStateTextureCache
 		if (forgeDirection != null)
 		{
 			directionIndex = forgeDirection.ordinal();
+		}
+		// Match the baked-model path: grass-style side colors fade toward dirt,
+		// so their texture must use the configured bottom face as well.
+		if (blockStateWrapper.useBottomTextureForSides()
+			&& direction != EDhDirection.UP && direction != EDhDirection.DOWN)
+		{
+			directionIndex = ForgeDirection.DOWN.ordinal();
 		}
 		
 		return TextureAtlasSpriteWrapper.resolveFaceSprite(blockStateWrapper.blockState, directionIndex);

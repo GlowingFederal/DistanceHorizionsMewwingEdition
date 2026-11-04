@@ -67,6 +67,7 @@ public class GlDhVanillaFadeShader extends GlAbstractShaderRenderer
 	public int uMaxLevelHeight = -1;
 	
 	public int uOnlyRenderLods = -1;
+    private int ditherTransition, horizontalFade;
 	public int uIsMcReverseZDepth = -1;
 	public int uDepthIsZeroToPositiveOne = -1;
 	
@@ -91,6 +92,8 @@ public class GlDhVanillaFadeShader extends GlAbstractShaderRenderer
 		// all uniforms should be tryGet...
 		// because disabling fade can cause the GLSL to optimize out most (if not all) uniforms
 		
+		this.ditherTransition = this.shader.tryGetUniformLocation("uDitherTransition");
+        this.horizontalFade = this.shader.tryGetUniformLocation("uHorizontalFade");
 		// near fade
 		this.uDhInvMvmProj = this.shader.tryGetUniformLocation("uDhInvMvmProj");
 		this.uMcInvMvmProj = this.shader.tryGetUniformLocation("uMcInvMvmProj");
@@ -136,6 +139,12 @@ public class GlDhVanillaFadeShader extends GlAbstractShaderRenderer
 		float fadeStartDistance = dhNearClipDistance * 1.5f;
 		float fadeEndDistance = dhNearClipDistance * 1.9f;
 		
+		this.shader.setUniform(this.ditherTransition, Config.Client.Advanced.Graphics.Quality.ditherDhFade.get());
+        #if MC_VER <= MC_1_7_10
+        this.shader.setUniform(this.horizontalFade, true);
+        #else
+        this.shader.setUniform(this.horizontalFade, false);
+        #endif
 		this.shader.setUniform(this.uStartFadeBlockDistance, fadeStartDistance);
 		this.shader.setUniform(this.uEndFadeBlockDistance, fadeEndDistance);
 		

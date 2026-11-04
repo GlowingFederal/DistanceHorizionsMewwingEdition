@@ -69,10 +69,18 @@ public class RenderBufferHandler implements AutoCloseable
 	public final LodQuadTree lodQuadTree;
 	
 	private final SortedArraySet<LodBufferContainer> loadedNearToFarBuffers;
-	/** temp array to prevent threading issues and prevent re-allocating the same array each frame */
-	private final ArrayList<LodRenderSection> tempProcessNodeList = new ArrayList<>();
+
 	
-	private int visibleBufferCount;
+	private final LodPresentation<LodBufferContainer> presentation = new LodPresentation<>(LodBufferContainer::releaseFromRender);
+    private final ArrayList<LodBufferContainer> desiredBuffers = new ArrayList<>();
+    private final ArrayList<LodBufferContainer> presentedBuffers = new ArrayList<>();
+    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LodBufferContainer> desiredByPos = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    private final it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap coveredArea = new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
+    private final it.unimi.dsi.fastutil.longs.LongOpenHashSet fallbackPositions = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+    private final it.unimi.dsi.fastutil.longs.LongOpenHashSet fallbackAncestors = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+    private final ArrayList<LodBufferContainer> fallbackBuffers = new ArrayList<>();
+    private volatile boolean closed;
+    private int visibleBufferCount;
 	private int culledBufferCount;
 	private int shadowVisibleBufferCount;
 	private int shadowCulledBufferCount;
@@ -130,6 +138,7 @@ public class RenderBufferHandler implements AutoCloseable
 	 */
 	public void buildRenderList(RenderParam renderParams)
 	{
+        if (this.closed) { this.loadedNearToFarBuffers.clear(); return; }
 		if (ModInfo.IS_DEV_BUILD)
 		{
 			if (!RenderThreadTaskHandler.INSTANCE.isCurrentThread())
@@ -202,64 +211,40 @@ public class RenderBufferHandler implements AutoCloseable
 			this.culledBufferCount = 0;
 		}
 		
-		// setup iterator with culling frustum
-		this.lodQuadTree.populateListWithEnabledRenderSections(this.tempProcessNodeList);
-		for (LodRenderSection renderSection : this.tempProcessNodeList)
-		{
-			if (renderSection == null)
-			{
-				continue;
-			}
-			
-			
-			try
-			{
-				if (enableFrustumCulling)
-				{
-					int blockMinX = DhSectionPos.getMinCornerBlockX(renderSection.pos);
-					int blockMinZ = DhSectionPos.getMinCornerBlockZ(renderSection.pos);
-					int blockWidth = DhSectionPos.getBlockWidth(renderSection.pos);
-					byte detailLevel = DhSectionPos.getDetailLevel(renderSection.pos);
-					if (!frustum.intersects(blockMinX, blockMinZ, blockWidth, detailLevel))
-					{
-						if (isShadowPass)
-						{
-							this.shadowCulledBufferCount++;
-						}
-						else
-						{
-							this.culledBufferCount++;
-						}
-						
-						continue;
-					}
-				}
-			}
-			catch (Exception e)
-			{
-				// don't cull if there was an unexpected issue
-				LOGGER.error("Unexpected issue during culling for node pos: ["+DhSectionPos.toString(renderSection.pos)+"], error: ["+e.getMessage()+"].", e);
-			}
-			
-			
-			try
-			{
-				LodBufferContainer bufferContainer = renderSection.renderBufferContainer;
-				if (bufferContainer == null
-					|| !renderSection.getRenderingEnabled())
-				{
-					// shouldn't happen, but just in case
-					continue;
-				}
-				
-				this.loadedNearToFarBuffers.add(bufferContainer);
-			}
-			catch (Exception e)
-			{
-				LOGGER.error("Error updating QuadTree render source at [" + DhSectionPos.toString(renderSection.pos) + "], error: ["+e.getMessage()+"].", e);
-			}
-		}
-		
+        // Update the complete frontier before frustum culling. Looking away must not retire coverage.
+        if (!isShadowPass)
+        {
+            this.lodQuadTree.acquireEnabledBuffers(this.desiredBuffers);
+            if (!this.presentation.matchesCurrent(this.desiredBuffers)) this.preserveUnreplacedCoverage();
+            this.presentation.update(this.desiredBuffers, System.nanoTime(),
+                renderParams.renderDefinition.getRenderApi() == com.seibel.distanthorizons.api.enums.config.EDhApiRenderingApi.OPEN_GL
+                    && Config.Client.Advanced.Graphics.Quality.smoothLodTransitions.get()
+                    ? Config.Client.Advanced.Graphics.Quality.lodTransitionDurationMs.get() : 0);
+            this.desiredBuffers.clear(); // leases now belong to presentation
+        }
+        this.presentedBuffers.clear();
+        this.presentedBuffers.addAll(this.presentation.current());
+        this.presentedBuffers.addAll(this.presentation.outgoing());
+        for (LodBufferContainer buffer : this.presentedBuffers)
+        {
+            boolean outgoing = !this.presentation.isCurrent(buffer);
+            buffer.visibilityMin = outgoing ? this.presentation.progress() : 0.0f;
+            buffer.visibilityMax = outgoing ? 1.0f : (this.presentation.isIncoming(buffer) ? this.presentation.progress() : 1.0f);
+            try
+            {
+                if (enableFrustumCulling && !frustum.intersects(
+                    DhSectionPos.getMinCornerBlockX(buffer.pos), DhSectionPos.getMinCornerBlockZ(buffer.pos),
+                    DhSectionPos.getBlockWidth(buffer.pos), DhSectionPos.getDetailLevel(buffer.pos)))
+                {
+                    if (isShadowPass) this.shadowCulledBufferCount++;
+                    else this.culledBufferCount++;
+                    continue;
+                }
+            }
+            catch (Exception e) { LOGGER.error("Terrain frustum error; retaining coverage", e); }
+            this.loadedNearToFarBuffers.add(buffer);
+        }
+
 		if (isShadowPass)
 		{
 			this.shadowVisibleBufferCount = this.loadedNearToFarBuffers.size();
@@ -273,6 +258,54 @@ public class RenderBufferHandler implements AutoCloseable
 		
 	}
 	
+    /** Preserve live coverage even across hard cache clears and partially restored frontiers. */
+    private void preserveUnreplacedCoverage()
+    {
+        this.desiredByPos.clear();
+        this.coveredArea.clear();
+        this.fallbackBuffers.clear();
+        this.fallbackPositions.clear();
+        this.fallbackAncestors.clear();
+        for (LodBufferContainer buffer : this.desiredBuffers)
+        {
+            this.desiredByPos.put(buffer.pos, buffer);
+            if (!buffer.coverage.isComplete()) continue;
+            long width = DhSectionPos.getBlockWidth(buffer.pos);
+            long area = width * width;
+            for (long pos = buffer.pos; DhSectionPos.getDetailLevel(pos) <= 30; pos = DhSectionPos.getParentPos(pos))
+                this.coveredArea.addTo(pos, area);
+        }
+        for (LodBufferContainer previous : this.presentation.current())
+        {
+            if (!this.lodQuadTree.isSectionPosInBounds(previous.pos)) continue;
+            LodBufferContainer exact = this.desiredByPos.get(previous.pos);
+            if (exact != null && exact.coverage.contains(previous.coverage)) continue;
+            long width = DhSectionPos.getBlockWidth(previous.pos);
+            boolean covered = this.coveredArea.get(previous.pos) >= width * width;
+            for (long pos = DhSectionPos.getParentPos(previous.pos); !covered && DhSectionPos.getDetailLevel(pos) <= 30; pos = DhSectionPos.getParentPos(pos))
+            {
+                LodBufferContainer parent = this.desiredByPos.get(pos);
+                covered = parent != null && parent.coverage.isComplete();
+            }
+            if (covered) continue;
+            this.fallbackBuffers.add(previous);
+            this.fallbackPositions.add(previous.pos);
+            for (long pos = previous.pos; DhSectionPos.getDetailLevel(pos) <= 30; pos = DhSectionPos.getParentPos(pos))
+                this.fallbackAncestors.add(pos);
+        }
+        if (this.fallbackBuffers.isEmpty()) return;
+        for (int i = this.desiredBuffers.size() - 1; i >= 0; i--)
+        {
+            LodBufferContainer buffer = this.desiredBuffers.get(i);
+            boolean overlap = this.fallbackAncestors.contains(buffer.pos);
+            for (long pos = buffer.pos; !overlap && DhSectionPos.getDetailLevel(pos) <= 30; pos = DhSectionPos.getParentPos(pos))
+                overlap = this.fallbackPositions.contains(pos);
+            if (overlap) { this.desiredBuffers.remove(i); buffer.releaseFromRender(); }
+        }
+        for (LodBufferContainer fallback : this.fallbackBuffers)
+            if (fallback.retainForRender()) this.desiredBuffers.add(fallback);
+    }
+
 	//endregion
 	
 	
@@ -328,7 +361,20 @@ public class RenderBufferHandler implements AutoCloseable
 	//region
 	
 	@Override
-	public void close() { this.lodQuadTree.close(); }
+	public synchronized void close()
+    {
+        if (this.closed) return;
+        this.closed = true;
+        this.lodQuadTree.close();
+        RenderThreadTaskHandler.INSTANCE.queueRunningOnRenderThread("Terrain presentation close", () ->
+        {
+            this.presentation.close();
+            this.loadedNearToFarBuffers.clear();
+            this.presentedBuffers.clear();
+            this.fallbackBuffers.clear();
+            this.desiredByPos.clear();
+        });
+    }
 	
 	//endregion
 	

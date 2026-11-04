@@ -20,6 +20,9 @@ uniform float uMaxLevelHeight;
 uniform bool uOnlyRenderLods;
 uniform bool uIsMcReverseZDepth;
 uniform bool uDepthIsZeroToPositiveOne;
+uniform bool uDitherTransition;
+uniform bool uHorizontalFade;
+// DH_PRESENTATION_SHADER
 
 
 
@@ -95,17 +98,19 @@ void main()
     {
         fragColor = vec4(combinedMcDhColor.rgb, 0.0);
     }
-    else if (isGround)
+    else if (isGround && dhFragmentDepth > 0.0 && dhFragmentDepth < 1.0)
     {
         // fade based on distance from the camera
         vec3 mcVertexWorldPos = calcViewPosition(mcFragmentDepth, uMcInvMvmProj);
-        float mcFragmentDistance = length(mcVertexWorldPos.xzy);
+        float mcFragmentDistance = uHorizontalFade ? length(mcVertexWorldPos.xz) : length(mcVertexWorldPos);
 
 
         // Smoothly transition between combinedMcDhColor and uDhColorTexture
         // as the depth increases from the camera
         float fadeStep = smoothstep(uStartFadeBlockDistance, uEndFadeBlockDistance, mcFragmentDistance);
-        fragColor = mix(combinedMcDhColor, dhColor, fadeStep);
+        fragColor = uDitherTransition
+            ? (dhp_threshold(gl_FragCoord.xy) < fadeStep ? dhColor : combinedMcDhColor)
+            : mix(combinedMcDhColor, dhColor, fadeStep);
         fragColor.a = 1.0;
     }
     else

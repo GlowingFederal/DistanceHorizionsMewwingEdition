@@ -127,13 +127,17 @@ public class GlShader
 					throw new FileNotFoundException("Shader file not found in resource: " + path);
 				}
 			}
-			BufferedReader reader = new BufferedReader(new InputStreamReader(in));
-			
-			// read in the file
-			String line;
-			while ((line = reader.readLine()) != null)
+			try (BufferedReader reader = new BufferedReader(new InputStreamReader(in)))
 			{
-				stringBuilder.append(line).append("\n");
+				String line;
+				while ((line = reader.readLine()) != null)
+				{
+					if (line.equals("// DH_PRESENTATION_SHADER"))
+                        stringBuilder.append(loadFile("assets/distanthorizons/shaders/terrain/gl/presentation.glsl", false));
+                    else if (line.equals("// DH_FOLIAGE_SHADER"))
+						stringBuilder.append(loadFile("assets/distanthorizons/shaders/terrain/gl/foliage.glsl", false));
+					else stringBuilder.append(line).append("\n");
+				}
 			}
 		}
 		catch (IOException e)

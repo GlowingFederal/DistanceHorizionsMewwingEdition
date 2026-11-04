@@ -75,7 +75,9 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 	private final LodQuadTree quadTree;
 	
 	
-	private boolean renderingEnabled = false;
+	private volatile boolean renderingEnabled = false;
+    private volatile boolean closed;
+    private volatile boolean loadAttempted;
 	/** 
 	 * Used when a node goes out of render distance
 	 * but isn't removed from the underlying quad tree structure. <br><br>
@@ -84,11 +86,11 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 	 * for cached render data caching purposes, but not
 	 * for re-creating missing nodes.
 	 */
-	public boolean renderDataDirty = false;
+	public volatile boolean renderDataDirty = false;
 	public boolean queuedMissingSectionsForRetrieval = false;
 	
 	/** this reference is necessary so we can determine what VBO to render */
-	public LodBufferContainer renderBufferContainer; 
+	public volatile LodBufferContainer renderBufferContainer;
 	
 	
 	/** 
@@ -136,7 +138,7 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 	/** @return true if the upload started, false if it wasn't able to for any reason */
 	public synchronized boolean uploadRenderDataToGpuAsync()
 	{
-		if (this.getAndBuildRenderDataFutureRef.get() != null)
+		if (this.closed || this.getAndBuildRenderDataFutureRef.get() != null)
 		{
 			// don't accidentally queue multiple uploads at the same time
 			return false;
@@ -184,15 +186,16 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 						}
 						
 						// 3 because that's generally the max needed
-						PhantomArrayListCheckout opaqueCheckout = LodQuadBuilder.ARRAY_LIST_POOL.checkoutByteBuffers(3);
-						PhantomArrayListCheckout transparentCheckout = LodQuadBuilder.ARRAY_LIST_POOL.checkoutByteBuffers(3);
+						try (PhantomArrayListCheckout opaqueCheckout = LodQuadBuilder.ARRAY_LIST_POOL.checkoutByteBuffers(3);
+                             PhantomArrayListCheckout transparentCheckout = LodQuadBuilder.ARRAY_LIST_POOL.checkoutByteBuffers(3))
+                        {
 						
 						// create CPU vertex buffers
 						ArrayList<ByteBuffer> opaqueBuffers = lodQuadBuilder.makeOpaqueVertexBuffers(opaqueCheckout);
 						ArrayList<ByteBuffer> transparentBuffers = lodQuadBuilder.makeTransparentVertexBuffers(transparentCheckout);
 						
 						// uploading will primarily happen on the render thread
-						this.uploadToGpuAsync(future, opaqueBuffers, transparentBuffers)
+						this.uploadToGpuAsync(future, opaqueBuffers, transparentBuffers, lodQuadBuilder.coverage)
 							// Join is used to prevent queuing up potentially thousands of
 							// upload tasks (each requiring their own staging buffer)
 							// causing an explosion of pooled memory use.
@@ -201,13 +204,12 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 							// so it shouldn't be a big speed loss for the lower memory cost.
 							.join();
 						{
-							opaqueCheckout.close();
-							transparentCheckout.close();
-							
+
 							// the future is passed in separately (IE not using the local var) 
 							// to prevent any possible race condition null pointers
 							future.complete(null);
 						}
+                        }
 					}
 				}
 				catch (Exception e)
@@ -237,7 +239,7 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 	//region
 	
 	@Nullable
-	private synchronized LodQuadBuilder getAndBuildRenderData()
+	private LodQuadBuilder getAndBuildRenderData()
 	{
 		try (ColumnRenderSource thisRenderSource = this.getRenderSourceForPos(this.pos, null))
 		{
@@ -329,13 +331,14 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 	private synchronized CompletableFuture<LodBufferContainer> uploadToGpuAsync(
 		CompletableFuture<Void> parentFuture,
 		ArrayList<ByteBuffer> opaqueBuffers,
-		ArrayList<ByteBuffer> transparentBuffers)
+		ArrayList<ByteBuffer> transparentBuffers,
+        com.seibel.distanthorizons.core.dataObjects.render.LodCoverage coverage)
 	{
 		CompletableFuture<LodBufferContainer> uploadFuture = LodBufferContainer.tryMakeAndUploadBuffersAsync(
 			this.pos, this.clientLevelWrapper, 
 			opaqueBuffers, 
-			transparentBuffers);
-		uploadFuture.whenComplete((bufferContainer, e) ->
+			transparentBuffers, coverage);
+		CompletableFuture<LodBufferContainer> publicationFuture = uploadFuture.whenComplete((bufferContainer, e) ->
 		{
 			try
 			{
@@ -355,26 +358,27 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 					return;
 				}
 				
-				// close the old container
-				LodBufferContainer oldContainer = this.renderBufferContainer;
-				this.renderBufferContainer = bufferContainer.buffersUploaded ? bufferContainer : null;
-				if (oldContainer != null)
-				{
-					oldContainer.close();
-				}
-				
-				// upload complete
-				this.renderDataDirty = false;
-				
-				
-				if (parentFuture.isCancelled())
-				{
-					// if the parent future was canceled that likely means
-					// this LodRenderSection was closed before this point,
-					// meaning this buffer will become homeless, 
-					// so we need to clean it up here
-					bufferContainer.close();
-				}
+                synchronized (this)
+                {
+                    // Unloaded sections must never publish late uploads.
+                    if (this.closed || parentFuture.isCancelled() || !bufferContainer.buffersUploaded)
+                    {
+                        bufferContainer.close();
+                        return;
+                    }
+                    LodBufferContainer previous = this.renderBufferContainer;
+                    // Incomplete retrieval is not evidence that known terrain became air.
+                    if (coverage.isEmpty() || (previous != null && !coverage.contains(previous.coverage)))
+                        bufferContainer.close();
+                    else
+                    {
+                        this.renderBufferContainer = bufferContainer;
+                        if (previous != null) previous.close(); // frame leases defer deletion
+                    }
+                    this.loadAttempted = true;
+                    this.renderDataDirty = false;
+                }
+
 			}
 			catch (Exception finishEx)
 			{
@@ -382,7 +386,7 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 			}
 		});
 		
-		return uploadFuture;
+		return publicationFuture;
 	}
 	
 	//endregion render data uploading
@@ -394,10 +398,16 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 	//=================//
 	//region
 	
-	public boolean canRender() { return this.renderBufferContainer != null; }
+	public boolean canRender() { LodBufferContainer buffer = this.renderBufferContainer; return buffer != null && buffer.buffersUploaded; }
+    public boolean hasCompleteCoverage() { LodBufferContainer buffer = this.renderBufferContainer; return buffer != null && buffer.buffersUploaded && buffer.coverage.isComplete(); }
+    public synchronized LodBufferContainer acquireRenderBuffer()
+    {
+        LodBufferContainer buffer = this.renderBufferContainer;
+        return buffer != null && buffer.retainForRender() ? buffer : null;
+    }
 	public boolean gpuUploadComplete() 
 	{ 
-		return this.renderBufferContainer != null
+		return this.loadAttempted
 			// render dirty is here so we can trigger new GPU uploads
 			// even if the render data is present
 			&& !this.renderDataDirty; 
@@ -426,7 +436,7 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 			//color = Color.green;
 			return;
 		}
-		else if (this.getAndBuildRenderDataFutureRef.get() != null)
+		else if (this.closed || this.getAndBuildRenderDataFutureRef.get() != null)
 		{
 			color = Color.yellow;
 		}
@@ -458,8 +468,10 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 	}
 	
 	@Override
-	public void close()
+	public synchronized void close()
 	{
+        if (this.closed) return;
+        this.closed = true;
 		DEBUG_RENDERER.unregister(this, Config.Client.Advanced.Debugging.DebugWireframe.showRenderSectionStatus);
 		
 		if (Config.Client.Advanced.Debugging.DebugWireframe.showRenderSectionStatus.get())
@@ -501,6 +513,7 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 		if (this.renderBufferContainer != null)
 		{
 			this.renderBufferContainer.close();
+            this.renderBufferContainer = null;
 		}
 		
 	}

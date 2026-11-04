@@ -289,7 +289,7 @@ public class ClientLevelModule implements Closeable, IDataSourceUpdateListenerFu
 		public void close()
 		{
 			//LOGGER.info("Shutting down " + ClientRenderState.class.getSimpleName());
-			this.quadtree.close();
+			this.renderBufferHandler.close();
 		}
 		
 	}

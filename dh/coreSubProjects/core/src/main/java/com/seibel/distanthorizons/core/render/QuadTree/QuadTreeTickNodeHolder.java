@@ -31,6 +31,7 @@ public class QuadTreeTickNodeHolder
 	 * Always generated based on other 
 	 */
 	private final ArrayList<QuadNode<LodRenderSection>> nodesForWorldGen = new ArrayList<>();
+    private final HashSet<QuadNode<LodRenderSection>> desiredNodes = new HashSet<>();
 	
 	private final QuadNodeNearComparator quadNodeNearComparator = new QuadNodeNearComparator();
 	
@@ -44,6 +45,7 @@ public class QuadTreeTickNodeHolder
 	public void clear()
 	{
 		this.sectionsToLoad.clear();
+        this.desiredNodes.clear();
 		
 		this.presentNodes.clear();
 		
@@ -54,7 +56,8 @@ public class QuadTreeTickNodeHolder
 	
 	
 	// loading
-	public void addLoadSection(LodRenderSection section) { this.sectionsToLoad.add(section); }
+	public void addWorldGenNode(QuadNode<LodRenderSection> node) { this.desiredNodes.add(node); }
+    public void addLoadSection(LodRenderSection section) { this.sectionsToLoad.add(section); }
 	public HashSet<LodRenderSection> getLoadSections() { return this.sectionsToLoad; }
 	
 	
@@ -122,11 +125,10 @@ public class QuadTreeTickNodeHolder
 	public ArrayList<QuadNode<LodRenderSection>> getWorldGenNodesNearToFar(DhBlockPos2D centerPos) 
 	{
 		this.quadNodeNearComparator.centerPos = centerPos;
-		this.nodesToEnableDeleteChildrenList.sort(this.quadNodeNearComparator);
-		
 		// this 
 		this.nodesForWorldGen.clear();
-		this.nodesForWorldGen.addAll(this.nodesToEnableDeleteChildrenList);
+		this.nodesForWorldGen.addAll(this.desiredNodes);
+        this.nodesForWorldGen.sort(this.quadNodeNearComparator);
 		
 		return this.nodesForWorldGen;
 	}

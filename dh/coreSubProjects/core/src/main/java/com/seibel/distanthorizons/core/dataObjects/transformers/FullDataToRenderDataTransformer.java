@@ -25,6 +25,7 @@ import com.seibel.distanthorizons.core.config.Config;
 import com.seibel.distanthorizons.core.dataObjects.fullData.FullDataPointIdMap;
 import com.seibel.distanthorizons.core.dataObjects.fullData.sources.FullDataSourceV2;
 import com.seibel.distanthorizons.core.dataObjects.render.ColumnRenderSource;
+import com.seibel.distanthorizons.core.dataObjects.render.VegetationRenderData;
 import com.seibel.distanthorizons.core.dataObjects.render.textures.BlockTextureRegistry;
 import com.seibel.distanthorizons.core.dataObjects.render.columnViews.ColumnRenderView;
 import com.seibel.distanthorizons.core.dependencyInjection.SingletonInjector;
@@ -126,6 +127,7 @@ public class FullDataToRenderDataTransformer
 			return columnSource;
 		}
 		
+		columnSource.coverage = com.seibel.distanthorizons.core.dataObjects.render.LodCoverage.from(fullDataSource);
 		columnSource.markNotEmpty();
 		int baseX = DhSectionPos.getMinCornerBlockX(pos);
 		int baseZ = DhSectionPos.getMinCornerBlockZ(pos);
@@ -181,7 +183,7 @@ public class FullDataToRenderDataTransformer
 		if (fullDataLength <= columnArrayView.maxVerticalSliceCount)
 		{
 			// Directly use the arrayView since it fits.
-			setRenderColumnView(levelWrapper, fullDataSource, blockX, blockZ, columnArrayView, fullDataColumn, mutableBlockPos, true);
+			setRenderColumnView(levelWrapper, fullDataSource, blockX, blockZ, columnArrayView, fullDataColumn, mutableBlockPos, true, columnSource);
 		}
 		else
 		{
@@ -192,7 +194,7 @@ public class FullDataToRenderDataTransformer
 			tempExpandingColumnView.populate(
 				dataArrayList, voidDataArrayList,
 				fullDataLength, 0, 0, fullDataLength);
-			setRenderColumnView(levelWrapper, fullDataSource, blockX, blockZ, tempExpandingColumnView, fullDataColumn, mutableBlockPos, false);
+			setRenderColumnView(levelWrapper, fullDataSource, blockX, blockZ, tempExpandingColumnView, fullDataColumn, mutableBlockPos, false, columnSource);
 			
 			columnArrayView.changeVerticalSizeFrom(tempExpandingColumnView, reducingList);
 		}
@@ -290,6 +292,15 @@ public class FullDataToRenderDataTransformer
 			int blockX, int blockZ,
 			ColumnRenderView renderColumnData, LongArrayList fullColumnData, DhBlockPosMutable mutableBlockPos,
 			boolean preserveSurfaceTint)
+	{
+		setRenderColumnView(levelWrapper, fullDataSource, blockX, blockZ, renderColumnData,
+			fullColumnData, mutableBlockPos, preserveSurfaceTint, null);
+	}
+
+	private static void setRenderColumnView(
+			IClientLevelWrapper levelWrapper, FullDataSourceV2 fullDataSource, int blockX, int blockZ,
+			ColumnRenderView renderColumnData, LongArrayList fullColumnData, DhBlockPosMutable mutableBlockPos,
+			boolean preserveSurfaceTint, @Nullable ColumnRenderSource columnSource)
 	{
 		//===============//
 		// config values //
@@ -539,6 +550,43 @@ public class FullDataToRenderDataTransformer
 			//=======================//
 			// non-solid block check //
 			//=======================//
+
+			// Crossed plants have their own geometry and never color or occlude terrain,
+			// even with foliage disabled or when the terrain's vertical budget is reduced.
+			if (block.getLodVegetationKind() != 0)
+			{
+				IBlockStateWrapper plant = block;
+				if (fullDataIndex + 1 < fullColumnData.size())
+				{
+					long below = fullColumnData.getLong(fullDataIndex + 1);
+					if (FullDataPointUtil.getBottomY(below) + FullDataPointUtil.getHeight(below) == bottomY)
+					{
+						try { plant = block.getPlantRenderState(fullDataMapping.getBlockStateWrapper(FullDataPointUtil.getId(below)), levelWrapper); }
+						catch (IndexOutOfBoundsException ignored) { /* The normal mapping check logs this on the next iteration. */ }
+					}
+				}
+				byte kind = plant.getLodVegetationKind();
+				if (columnSource != null && fullDataSource.getDataDetailLevel() == 0
+					&& columnSource.hasTextureSetIds() && VegetationRenderData.enabled(kind)
+					&& VegetationRenderData.includesColumn(blockX, blockZ, Config.Client.Advanced.Graphics.Foliage.vegetationDensity.get()))
+				{
+					int plantColor = levelWrapper.getBlockColor(mutableBlockPos, biome, fullDataSource, plant);
+					if (ColorUtil.getAlpha(plantColor) != 0)
+					{
+						short texture = BlockTextureRegistry.INSTANCE.getOrRegisterBlockStateSetId(plant);
+						if (texture != 0)
+						{
+							if (columnSource.vegetation == null) columnSource.vegetation = new VegetationRenderData();
+							columnSource.vegetation.add(blockX, blockZ, RenderDataPointUtil.createDataPoint(
+								topY, bottomY, ColorUtil.setAlpha(plantColor, 255), skyLight, blockLight, plant.getMaterialId()), texture);
+						}
+					}
+				}
+				// Keep exposed terrain lit, without transferring plant color or material.
+				skylightToApplyToNextBlock = skyLight;
+				blocklightToApplyToNextBlock = blockLight;
+				continue;
+			}
 			
 			boolean ignoreNonSolidBlock =
 				ignoreNonCollidingBlocks
@@ -721,7 +769,9 @@ public class FullDataToRenderDataTransformer
 			if (!splitSurfaceTint // keep the terrain's material even if the decoration has the same color
 				&& color == lastColor
 				&& bottomY + blockHeight == lastBottom  
-				&& renderDataIndex > 0)
+				&& renderDataIndex > 0
+				// A leaf's cutout material must not spread into equally colored terrain or trunks.
+				&& RenderDataPointUtil.getBlockMaterialId(renderColumnData.get(renderDataIndex - 1)) == block.getMaterialId())
 			{
 				//replace the previous block with new bottom
 				long columnData = renderColumnData.get(renderDataIndex - 1);

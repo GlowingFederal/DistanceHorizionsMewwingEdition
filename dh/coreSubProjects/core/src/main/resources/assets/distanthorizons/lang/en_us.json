@@ -1,4 +1,15 @@
 {
+  "distanthorizons.config.client.advanced.graphics.foliage": "Foliage",
+  "distanthorizons.config.client.advanced.graphics.foliage.transparentLodLeaves": "Transparent LOD Leaves",
+  "distanthorizons.config.client.advanced.graphics.foliage.transparentLodLeaves.@tooltip": "See-through leaves at block resolution. Requires textured LODs. Rebuilds client meshes from cached data without regenerating the world.",
+  "distanthorizons.config.client.advanced.graphics.foliage.lodGrass": "LOD Grass",
+  "distanthorizons.config.client.advanced.graphics.foliage.lodGrass.@tooltip": "Render crossed grass and ferns at block resolution. Requires textured LODs. Rebuilds client meshes only.",
+  "distanthorizons.config.client.advanced.graphics.foliage.lodFlowers": "LOD Flowers",
+  "distanthorizons.config.client.advanced.graphics.foliage.lodFlowers.@tooltip": "Render crossed flowers and other supported plants at block resolution. Requires textured LODs. Rebuilds client meshes only.",
+  "distanthorizons.config.client.advanced.graphics.foliage.vegetationRenderDistance": "LOD Vegetation Render Distance",
+  "distanthorizons.config.client.advanced.graphics.foliage.vegetationRenderDistance.@tooltip": "Maximum vegetation distance in chunks, also limited by LOD detail. Applies immediately.",
+  "distanthorizons.config.client.advanced.graphics.foliage.vegetationDensity": "LOD Vegetation Density (%)",
+  "distanthorizons.config.client.advanced.graphics.foliage.vegetationDensity.@tooltip": "Percentage of plant columns represented. Rebuilds client meshes only. Plant colors never tint terrain, including when vegetation is disabled.",
   "distanthorizons.title":
 	"Distant Horizons",
 
@@ -153,6 +164,10 @@
     "Grass Side Rendering",
   "distanthorizons.config.client.advanced.graphics.quality.grassSideRendering.@tooltip":
     "How should the sides and bottom of grass block LODs render?",
+  "distanthorizons.config.client.advanced.graphics.quality.smoothLodTransitions": "Smooth LOD Transitions",
+  "distanthorizons.config.client.advanced.graphics.quality.smoothLodTransitions.@tooltip": "Use complementary screen-door handoffs after replacement coverage is uploaded. Coverage safeguards remain enabled when animation is off.",
+  "distanthorizons.config.client.advanced.graphics.quality.lodTransitionDurationMs": "LOD Transition Duration (ms)",
+  "distanthorizons.config.client.advanced.graphics.quality.lodTransitionDurationMs.@tooltip": "Time to present uploaded meshes. Default: 350 ms. Zero disables animation. At most one outgoing frontier is retained.",
   "distanthorizons.config.client.advanced.graphics.quality.ditherDhFade":
     "Fade Nearby DH LODs",
   "distanthorizons.config.client.advanced.graphics.quality.ditherDhFade.@tooltip":

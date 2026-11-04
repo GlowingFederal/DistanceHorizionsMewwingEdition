@@ -47,6 +47,13 @@ public interface IBlockStateWrapper extends IDhApiBlockStateWrapper
 	int getLightEmission();
 	
 	byte getMaterialId();
+
+	/** 0: ordinary block, 1: crossed grass/fern, 2: crossed flower/other plant. */
+	default byte getLodVegetationKind() { return 0; }
+
+	/** Resolve world-dependent plant halves for rendering without changing saved block states. */
+	default IBlockStateWrapper getPlantRenderState(IBlockStateWrapper below,
+		com.seibel.distanthorizons.core.wrapperInterfaces.world.ILevelWrapper level) { return this; }
 	
 	boolean isBeaconBlock();
 	/** IE a glass block that can affect the beacon beam color */

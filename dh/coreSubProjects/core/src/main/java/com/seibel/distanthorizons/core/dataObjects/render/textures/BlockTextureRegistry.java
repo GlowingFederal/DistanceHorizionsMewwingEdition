@@ -142,6 +142,7 @@ public class BlockTextureRegistry
 	 */
 	public synchronized short @Nullable [] getFaceTileIds(int setId)
 	{
+		setId &= 0xffff;
 		if (setId <= UNTEXTURED_ID || setId >= this.faceTileIdsBySetId.size())
 		{
 			return null;
@@ -289,6 +290,8 @@ public class BlockTextureRegistry
 				int sourceIndex = ((v * faceTexture.height / TextureUtil.TEXTURE_WIDTH_AND_HEIGHT) * faceTexture.width)
 						+ (u * faceTexture.width / TextureUtil.TEXTURE_WIDTH_AND_HEIGHT);
 				int argb = argbPixels[sourceIndex];
+				// A uniform-colored cutout still needs its coverage mask.
+				anyPixelDiffersFromAverage |= ColorUtil.getAlpha(argb) != 255;
 				
 				byte red, green, blue, alpha;
 				if (faceTexture.uploadAsColorRatio)

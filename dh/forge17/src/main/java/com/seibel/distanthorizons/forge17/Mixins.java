@@ -42,7 +42,7 @@ public enum Mixins implements IMixins
     CLIENT_ANGELICA_GENERIC_SHADER(
         new MixinBuilder().setPhase(Phase.EARLY)
         .addRequiredMod(TargetedMod.ANGELICA)
-        .addClientMixins("MixinIrisGenericRenderProgram")),
+        .addClientMixins("MixinIrisGenericRenderProgram", "MixinFoliageTransformPatcher", "MixinFoliageLodRenderProgram")),
 
     CLIENT_FADE(
 		new MixinBuilder().setPhase(Phase.EARLY)

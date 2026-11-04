@@ -151,6 +151,7 @@ public class Config
 				
 				public static ConfigUiLinkedEntry quickEnableTexturedLods = new ConfigUiLinkedEntry(Texture.enableTexturedLods);
 				public static ConfigCategory texture = new ConfigCategory.Builder().set(Texture.class).build();
+				public static ConfigCategory foliage = new ConfigCategory.Builder().set(Foliage.class).build();
 				public static ConfigUiLinkedEntry quickEnableNoiseTexture = new ConfigUiLinkedEntry(NoiseTexture.enableNoiseTexture);
 				public static ConfigCategory noiseTexture = new ConfigCategory.Builder().set(NoiseTexture.class).build();
 				public static ConfigUISpacer noiseTextureSpacer = new ConfigUISpacer.Builder().build();
@@ -312,7 +313,12 @@ public class Config
 					
 					public static ConfigUISpacer fadeSpacer = new ConfigUISpacer.Builder().build();
 					
-					public static ConfigEntry<Boolean> ditherDhFade = new ConfigEntry.Builder<Boolean>()
+					public static ConfigEntry<Boolean> smoothLodTransitions = new ConfigEntry.Builder<Boolean>()
+                        .set(true).comment("Use complementary screen-door handoffs for uploaded LOD meshes. Does not change coverage correctness.").build();
+                    public static ConfigEntry<Integer> lodTransitionDurationMs = new ConfigEntry.Builder<Integer>()
+                        .setMinDefaultMax(0, 350, 2000).comment("LOD presentation duration in milliseconds. Zero disables animation. Retains at most one outgoing frontier.").build();
+
+                    public static ConfigEntry<Boolean> ditherDhFade = new ConfigEntry.Builder<Boolean>()
 						.set(true)
 						.comment(""
 							+ "If true LODs will fade away as you get closer to them. \n"
@@ -662,6 +668,25 @@ public class Config
 					
 				}
 				
+				public static class Foliage
+				{
+					public static ConfigEntry<Boolean> transparentLodLeaves = new ConfigEntry.Builder<Boolean>()
+						.set(true).comment("See-through textured leaves at block resolution. Rebuilds client meshes from cached data; no world regeneration.")
+						.addListener(ReloadLodsConfigEventHandler.DELAYED_INSTANCE).build();
+					public static ConfigEntry<Boolean> lodGrass = new ConfigEntry.Builder<Boolean>()
+						.set(true).comment("Crossed grass and fern LODs at block resolution. Requires textured LODs. Rebuilds client meshes only.")
+						.addListener(ReloadLodsConfigEventHandler.DELAYED_INSTANCE).build();
+					public static ConfigEntry<Boolean> lodFlowers = new ConfigEntry.Builder<Boolean>()
+						.set(true).comment("Crossed flowers and other plant LODs at block resolution. Requires textured LODs. Rebuilds client meshes only.")
+						.addListener(ReloadLodsConfigEventHandler.DELAYED_INSTANCE).build();
+					public static ConfigEntry<Integer> vegetationRenderDistance = new ConfigEntry.Builder<Integer>()
+						.setMinDefaultMax(0, 64, 1024).comment("Maximum vegetation distance in chunks, further limited by LOD detail. Applies immediately without rebuilding meshes.")
+						.build();
+					public static ConfigEntry<Integer> vegetationDensity = new ConfigEntry.Builder<Integer>()
+						.setMinDefaultMax(0, 50, 100).comment("Percentage of plant columns represented. Stable sampling keeps tall plant halves together. Rebuilds client meshes only.")
+						.addListener(ReloadLodsConfigEventHandler.DELAYED_INSTANCE).build();
+				}
+
 				public static class Texture
 				{
 					public static ConfigEntry<Boolean> enableTexturedLods = new ConfigEntry.Builder<Boolean>()

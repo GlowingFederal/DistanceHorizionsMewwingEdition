@@ -61,7 +61,26 @@ public class LodBufferContainer implements IDhApiTerrainBufferContainer, AutoClo
 	public final DhBlockPos minCornerBlockPos;
 	public final long pos;
 	
-	public boolean buffersUploaded = false;
+	public volatile boolean buffersUploaded = false;
+    public com.seibel.distanthorizons.core.dataObjects.render.LodCoverage coverage;
+    /** Render-thread screen-door interval; unchanged buffers cover the whole interval. */
+    public float visibilityMin = 0.0f, visibilityMax = 1.0f;
+    private int renderReferences;
+    private boolean retired;
+    private boolean deletionQueued;
+
+    public synchronized boolean retainForRender()
+    {
+        if (!this.buffersUploaded) return false;
+        this.renderReferences++;
+        return true;
+    }
+    public synchronized void releaseFromRender()
+    {
+        if (--this.renderReferences < 0) throw new IllegalStateException("Unbalanced terrain buffer reference");
+        this.tryDelete();
+    }
+
 	
 	/**
 	 * final since this whole object would need to be recreated
@@ -117,7 +136,8 @@ public class LodBufferContainer implements IDhApiTerrainBufferContainer, AutoClo
 	public static CompletableFuture<LodBufferContainer> tryMakeAndUploadBuffersAsync(
 		long pos, IClientLevelWrapper clientLevelWrapper,
 		ArrayList<ByteBuffer> opaqueBuffers,
-		ArrayList<ByteBuffer> transparentBuffers
+		ArrayList<ByteBuffer> transparentBuffers,
+        com.seibel.distanthorizons.core.dataObjects.render.LodCoverage coverage
 	)
 	{
 		// new upload needed
@@ -135,6 +155,7 @@ public class LodBufferContainer implements IDhApiTerrainBufferContainer, AutoClo
 			clientLevelWrapper.getMinHeight(),
 			DhSectionPos.getMinCornerBlockZ(pos));
 		LodBufferContainer bufferContainer = new LodBufferContainer(pos, minCornerBlockPos);
+        bufferContainer.coverage = coverage;
 		
 		// update arrays to contain buffers
 		bufferContainer.vboOpaqueWrappers = resizeWrapperArray(bufferContainer.vboOpaqueWrappers, opaqueBuffers.size());
@@ -142,7 +163,7 @@ public class LodBufferContainer implements IDhApiTerrainBufferContainer, AutoClo
 		
 		PhantomArrayListCheckout opaqueIndexCheckout = ARRAY_LIST_POOL.checkoutByteBuffers(opaqueBuffers.size());
 		PhantomArrayListCheckout transparentIndexCheckout = ARRAY_LIST_POOL.checkoutByteBuffers(transparentBuffers.size());
-		future.thenRun(() -> 
+		future.whenComplete((result, error) ->
 		{
 			opaqueIndexCheckout.close();
 			transparentIndexCheckout.close();
@@ -478,9 +499,17 @@ public class LodBufferContainer implements IDhApiTerrainBufferContainer, AutoClo
 	 * upload, or render state). 
 	 */
 	@Override
-	public void close()
-	{
-		this.buffersUploaded = false;
+	public synchronized void close()
+    {
+        this.retired = true;
+        this.tryDelete();
+    }
+
+    private void tryDelete()
+    {
+        if (!this.retired || this.renderReferences != 0 || this.deletionQueued) return;
+        this.deletionQueued = true;
+        this.buffersUploaded = false;
 		
 		RenderThreadTaskHandler.INSTANCE.queueRunningOnRenderThread("LodBufferContainer Close", () -> 
 		{

@@ -14,7 +14,8 @@ out vec4 fragColor;
 // color where 128 means using the base LOD color.
 // Tiles are packed in a 2D grid, 256 tiles per row,
 // see AbstractBlockTextureAtlas.TILES_PER_ROW
-uniform sampler2D uBlockAtlas;
+// DH_FOLIAGE_SHADER
+// DH_PRESENTATION_SHADER
 
 // Fade/Clip Uniforms
 uniform float uClipDistance = 0.0;
@@ -92,38 +93,17 @@ float bayerMatrix4x4(vec2 st)
 
 
 
-/**
- * Returns the texture coordinate for this fragment,
- * matching the orientation block textures are baked with.
- * The normal index is the same order as EDhDirection:
- * 0 down, 1 up, 2 north, 3 south, 4 west, 5 east
- */
-vec2 blockFaceUv()
-{
-    vec3 pos = fract(vBlockPos);
-    switch (vNormalIndex)
-    {
-        case 0u: return vec2(pos.x, 1.0 - pos.z); // down
-        case 1u: return vec2(pos.x, pos.z); // up
-        case 2u: return vec2(1.0 - pos.x, 1.0 - pos.y); // north
-        case 3u: return vec2(pos.x, 1.0 - pos.y); // south
-        case 4u: return vec2(pos.z, 1.0 - pos.y); // west
-        default: return vec2(1.0 - pos.z, 1.0 - pos.y); // east
-    }
-}
-
 void main()
 {
+    dhp_present();
     fragColor = vertexColor;
+    float viewDist = length(vertexWorldPos);
     
     if (vTextureTileId != 0u)
     {
         // tile id -> grid cell -> exact texel.
         // texture() allow us to use mipmaps
-        ivec2 atlasSize = textureSize(uBlockAtlas, 0);
-        vec2 tileOrigin = vec2(float(vTextureTileId % 256u), float(vTextureTileId / 256u)) * 16.0;
-        vec2 uv = (tileOrigin + blockFaceUv() * 16.0) / vec2(atlasSize);
-        vec4 tile = texture(uBlockAtlas, uv);
+        vec4 tile = dhf_sample(vBlockPos, vNormalIndex, vTextureTileId, viewDist);
         
         // The tile's color ratio preserves the LOD's original tint and shading.
         // Tile color value of gray, 128 (half way between 0 and 255)
@@ -132,9 +112,8 @@ void main()
         fragColor.rgb = mix(fragColor.rgb, clampedColor, tile.a);
     }
     
-    float viewDist = length(vertexWorldPos);
     
-    if (uDitherDhRendering)
+    if (uDitherDhRendering && uClipDistance > 0.0)
     {
         // Dither out the fragment based on distance and noise.
         // Dithering is used since it works for both opaque and transparent rendering

@@ -19,6 +19,8 @@
 
 package com.seibel.distanthorizons.core.util;
 
+import com.seibel.distanthorizons.core.wrapperInterfaces.IVersionConstants;
+
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.api.enums.config.EDhApiDepthDirection;
 import com.seibel.distanthorizons.api.objects.math.DhApiMat4f;
@@ -79,11 +81,11 @@ public class RenderUtil
 		// in James' testing a near clip plane distance of 2 blocks is enough to allow the fragment
 		// culling to take effect instead of seeing the near clip plane.
 		float nearClipDist = RenderUtil.getNearClipPlaneInBlocks();
-		// limit the near clip plane if we are close to the ground
-		if (getHeightBasedNearClipOverrideBlockDistance() == -1)
+		// Legacy fallback terrain must also remain available when flying above mountains.
+		if ("1.7.10".equals(SingletonInjector.INSTANCE.get(IVersionConstants.class).getMinecraftVersion()) || getHeightBasedNearClipOverrideBlockDistance() == -1)
 		{
 			// min() used to prevent the near clip plane from becoming visible at large vanilla render distances
-			// DH's dithering/discard shader handles everything farther away anyway so the near clip plane
+			// The final depth-aware handoff owns legacy coverage; the physical near plane
 			// would just need to be far enough to prevent depth precision errors
 			nearClipDist = Math.min(nearClipDist, 7.5f);
 		}

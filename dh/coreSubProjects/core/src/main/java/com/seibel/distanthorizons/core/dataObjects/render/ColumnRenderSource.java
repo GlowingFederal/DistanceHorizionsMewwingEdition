@@ -89,7 +89,10 @@ public class ColumnRenderSource extends AbstractPhantomArrayList
 	 * Index {@link BlockTextureRegistry#UNTEXTURED_ID} is always the flat "no texture" set.
 	 */
 	public final ShortArrayList texturePalette = new ShortArrayList();
+	/** Optional, finest-detail plant geometry; owned by this render source, never serialized. */
+	public VegetationRenderData vegetation;
 	
+	public LodCoverage coverage = LodCoverage.EMPTY;
 	private boolean isEmpty = true;
 	
 	

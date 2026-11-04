@@ -59,6 +59,7 @@ public class ColumnRenderBufferBuilder
 			LodQuadBuilder quadBuilder, ColumnRenderSource renderSource, IClientLevelWrapper clientLevelWrapper,
 			ColumnRenderSource[] adjRegions, boolean[] isSameDetailLevel)
 	{
+		quadBuilder.coverage = renderSource.coverage;
 		//=============//
 		// debug check //
 		//=============//
@@ -291,6 +292,7 @@ public class ColumnRenderBufferBuilder
 			}// for x
 		}// phantom checkout
 		
+		if (renderSource.vegetation != null) renderSource.vegetation.addQuads(quadBuilder);
 		quadBuilder.mergeQuads();
 	}
 	private static void addRenderDataPointToBuilder(

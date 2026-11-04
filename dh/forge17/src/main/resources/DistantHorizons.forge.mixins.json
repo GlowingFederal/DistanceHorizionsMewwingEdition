@@ -18,6 +18,8 @@
     "MixinEntityRenderer",
     "MixinFramebuffer",
     "MixinIrisGenericRenderProgram",
+    "MixinFoliageTransformPatcher",
+    "MixinFoliageLodRenderProgram",
     "MixinMinecraft",
     "MixinNetHandlerPlayClient",
     "MixinOptionsScreen",

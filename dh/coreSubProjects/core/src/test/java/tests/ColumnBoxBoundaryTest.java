@@ -1,6 +1,7 @@
 package tests;
 
 import com.seibel.distanthorizons.api.enums.rendering.EDhApiBlockMaterial;
+import com.seibel.distanthorizons.core.config.Config;
 import com.seibel.distanthorizons.core.dataObjects.render.bufferBuilding.ColumnBox;
 import com.seibel.distanthorizons.core.dataObjects.render.bufferBuilding.LodQuadBuilder;
 import com.seibel.distanthorizons.core.dataObjects.render.columnViews.ColumnRenderView;
@@ -50,6 +51,29 @@ public class ColumnBoxBoundaryTest
 
 	private static int sideCount(int size, long point, long voidPoint) throws Exception
 	{
+		return sideCount(size, point, voidPoint, 0xff808080, (byte)2);
+	}
+
+	@Test public void cutoutLeavesKeepOpaqueAndWaterFacesBehindThem() throws Exception
+	{
+		boolean oldLeaves = Config.Client.Advanced.Graphics.Foliage.transparentLodLeaves.get();
+		boolean oldTextures = Config.Client.Advanced.Graphics.Texture.enableTexturedLods.get();
+		try {
+			Config.Client.Advanced.Graphics.Texture.enableTexturedLods.setWithoutFiringEvents(true);
+			long leaves = RenderDataPointUtil.createDataPoint(64, 0, 0xff408020, 15, 0, EDhApiBlockMaterial.LEAVES.index);
+			Config.Client.Advanced.Graphics.Foliage.transparentLodLeaves.setWithoutFiringEvents(false);
+			assertEquals(0, sideCount(1, leaves, 0));
+			Config.Client.Advanced.Graphics.Foliage.transparentLodLeaves.setWithoutFiringEvents(true);
+			assertEquals(1, sideCount(1, leaves, 0));
+			assertEquals(1, sideCount(1, leaves, 0, 0x808080ff, EDhApiBlockMaterial.WATER.index));
+		} finally {
+			Config.Client.Advanced.Graphics.Foliage.transparentLodLeaves.setWithoutFiringEvents(oldLeaves);
+			Config.Client.Advanced.Graphics.Texture.enableTexturedLods.setWithoutFiringEvents(oldTextures);
+		}
+	}
+
+	private static int sideCount(int size, long point, long voidPoint, int color, byte material) throws Exception
+	{
 		LongArrayList data = new LongArrayList(new long[]{point});
 		LongArrayList voidData = new LongArrayList(new long[]{voidPoint});
 		try (ColumnRenderView column = ColumnRenderView.getPooled(data, voidData, size, 0, 0, 1);
@@ -64,7 +88,7 @@ public class ColumnBoxBoundaryTest
 			method.setAccessible(true);
 			method.invoke(null, builder, arrays, LEVEL, column, null, true, 0, EDhDirection.NORTH,
 				(short)8, (short)0, (short)8, (short)1, (short)64,
-				0xff808080, (byte)2, (byte)0);
+				color, material, (byte)0);
 			return builder.getCurrentOpaqueQuadsCount() + builder.getCurrentTransparentQuadsCount();
 		}
 	}

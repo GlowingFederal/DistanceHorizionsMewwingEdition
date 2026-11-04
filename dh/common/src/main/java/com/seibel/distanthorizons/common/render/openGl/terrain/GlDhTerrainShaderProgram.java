@@ -86,9 +86,12 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
 	
 	public int uLightMap = -1;
 	public int uBlockAtlas = -1;
+	private int uVegetationDistance = -1;
+	private int uTexturesEnabled = -1;
 	
 	// fragment shader uniforms
 	public int uClipDistance = -1;
+    private int presentationMin, presentationMax;
 	public int uDitherDhRendering = -1;
 	
 	// Noise Uniforms
@@ -138,10 +141,14 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
 		this.uViewHeight = this.getUniformLocation("uViewHeight");
 		
 		this.uLightMap = this.getUniformLocation("uLightMap");
-		this.uBlockAtlas = this.getUniformLocation("uBlockAtlas");
+		this.uBlockAtlas = this.getUniformLocation("dhf_BlockAtlas");
+		this.uVegetationDistance = this.getUniformLocation("dhf_Distance");
+		this.uTexturesEnabled = this.getUniformLocation("dhf_Enabled");
 		
 		// Fog/Clip Uniforms
 		this.uClipDistance = this.getUniformLocation("uClipDistance");
+        this.presentationMin = this.getUniformLocation("dhp_Min");
+        this.presentationMax = this.getUniformLocation("dhp_Max");
 		
 		// Noise Uniforms
 		this.uNoiseEnabled = this.getUniformLocation("uNoiseEnabled");
@@ -236,6 +243,8 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
 		this.setUniform(this.uLightMap, LightMapWrapper.GL_DH_BOUND_INDEX);
 		
 		boolean texturedLodsEnabled = Config.Client.Advanced.Graphics.Texture.enableTexturedLods.get();
+		this.setUniform(this.uVegetationDistance, Config.Client.Advanced.Graphics.Foliage.vegetationRenderDistance.get() * 16.0f);
+		this.setUniform(this.uTexturesEnabled, texturedLodsEnabled);
 		if (texturedLodsEnabled)
 		{
 			this.setUniform(this.uBlockAtlas, GlBlockTextureAtlas.GL_BOUND_INDEX);
@@ -296,11 +305,20 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
 			// this added value prevents the near clip plane and discard circle from touching, which looks bad
 			dhNearClipDistance += 16f;
 		}
-		this.setUniform(this.uClipDistance, dhNearClipDistance);
+		#if MC_VER <= MC_1_7_10
+        // Vanilla draws over the LOD background. A radius cannot prove that chunks have rendered.
+        dhNearClipDistance = 0.0f;
+        #endif
+        this.setUniform(this.uClipDistance, dhNearClipDistance);
 	}
 	
 	@Override
-	public void setModelOffsetPos(DhApiVec3f modelOffsetPos) { this.setUniform(this.uModelOffset, new DhVec3f(modelOffsetPos)); }
+	public void setModelOffsetPos(DhApiVec3f modelOffsetPos)
+    {
+        this.setUniform(this.uModelOffset, new DhVec3f(modelOffsetPos));
+        this.setUniform(this.presentationMin, com.seibel.distanthorizons.core.render.LodPresentation.shaderMin);
+        this.setUniform(this.presentationMax, com.seibel.distanthorizons.core.render.LodPresentation.shaderMax);
+    }
 	
 	@Override
 	public int getId() { return this.id; }
@@ -397,7 +415,10 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
 					BEFORE_BUFFER_RENDER_EVENT_PARAM.update(renderEventParam, MODEL_POS);
 					
 					GlDhMetaRenderer.INSTANCE.shaderProgramForThisFrame.bind();
-					GlDhMetaRenderer.INSTANCE.shaderProgramForThisFrame.setModelOffsetPos(MODEL_POS);
+					boolean shadow = IRIS_ACCESSOR != null && IRIS_ACCESSOR.isRenderingShadowPass();
+                    com.seibel.distanthorizons.core.render.LodPresentation.shaderMin = shadow ? 0.0f : bufferContainer.visibilityMin;
+                    com.seibel.distanthorizons.core.render.LodPresentation.shaderMax = shadow ? 1.0f : bufferContainer.visibilityMax;
+                    GlDhMetaRenderer.INSTANCE.shaderProgramForThisFrame.setModelOffsetPos(MODEL_POS);
 					
 					ApiEventInjector.INSTANCE.fireAllEvents(DhApiBeforeBufferRenderEvent.class, BEFORE_BUFFER_RENDER_EVENT_PARAM);
 				}

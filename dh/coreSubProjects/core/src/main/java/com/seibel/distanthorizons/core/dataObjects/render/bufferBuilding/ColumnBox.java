@@ -64,6 +64,30 @@ public class ColumnBox
 		ColumnRenderView[] adjData, boolean[] isAdjDataSameDetailLevel,
 		short @Nullable [] faceTileIdsByDirectionOrdinal)
 	{
+		builder.seeThroughForNewQuads = blockWidth == 1 && irisBlockMaterialId == EDhApiBlockMaterial.LEAVES.index
+			&& faceTileIdsByDirectionOrdinal != null && Config.Client.Advanced.Graphics.Foliage.transparentLodLeaves.get();
+		try
+		{
+			addBoxQuads(builder, phantomArrayCheckout, clientLevelWrapper, blockWidth, yHeight, minX, minY, minZ,
+				color, irisBlockMaterialId, skyLight, blockLight, topData, bottomData, adjData, isAdjDataSameDetailLevel, faceTileIdsByDirectionOrdinal);
+		}
+		finally { builder.seeThroughForNewQuads = false; }
+	}
+
+	private static boolean isSeeThroughLeaves(long point, short blockWidth)
+	{
+		return blockWidth == 1 && RenderDataPointUtil.doesDataPointExist(point)
+			&& RenderDataPointUtil.getBlockMaterialId(point) == EDhApiBlockMaterial.LEAVES.index
+			&& Config.Client.Advanced.Graphics.Texture.enableTexturedLods.get()
+			&& Config.Client.Advanced.Graphics.Foliage.transparentLodLeaves.get();
+	}
+
+	private static void addBoxQuads(
+		LodQuadBuilder builder, PhantomArrayListCheckout phantomArrayCheckout, IClientLevelWrapper clientLevelWrapper,
+		short blockWidth, short yHeight, short minX, short minY, short minZ,
+		int color, byte irisBlockMaterialId, byte skyLight, byte blockLight, long topData, long bottomData,
+		ColumnRenderView[] adjData, boolean[] isAdjDataSameDetailLevel, short @Nullable [] faceTileIdsByDirectionOrdinal)
+	{
 		//================//
 		// variable setup //
 		//================//
@@ -115,7 +139,7 @@ public class ColumnBox
 		{
 			boolean skipTop = RenderDataPointUtil.doesDataPointExist(topData)
 					&& (RenderDataPointUtil.getYMin(topData) == maxY)
-					&& !isTopTransparent;
+					&& !isTopTransparent && !isSeeThroughLeaves(topData, blockWidth);
 			
 			if (!skipTop)
 			{
@@ -132,7 +156,7 @@ public class ColumnBox
 		{
 			boolean skipBottom = RenderDataPointUtil.doesDataPointExist(bottomData)
 					&& (RenderDataPointUtil.getYMax(bottomData) == minY)
-					&& !isBottomTransparent;
+					&& !isBottomTransparent && !isSeeThroughLeaves(bottomData, blockWidth);
 			if (!skipBottom)
 			{
 				builder.addQuadDown(
@@ -146,6 +170,21 @@ public class ColumnBox
 		
 		
 		
+		// Adapted from R-Besson/DistantHorizonsRetro f9560b9 (LGPL v3):
+		// RLE leaf stacks also need the internal horizontal faces visible through gaps.
+		if (builder.seeThroughForNewQuads)
+		{
+			for (int faceY = minY + 1; faceY < maxY; faceY++)
+			{
+				builder.addQuadUp(minX, (short) faceY, minZ, blockWidth,
+					ColorUtil.applyShade(color, clientLevelWrapper.getShade(EDhDirection.UP)), tryGetTextureId(faceTileIdsByDirectionOrdinal, EDhDirection.UP),
+					irisBlockMaterialId, skyLight, blockLight);
+				builder.addQuadDown(minX, (short) faceY, minZ, blockWidth,
+					ColorUtil.applyShade(color, clientLevelWrapper.getShade(EDhDirection.DOWN)), tryGetTextureId(faceTileIdsByDirectionOrdinal, EDhDirection.DOWN),
+					irisBlockMaterialId, skyLight, blockLight);
+			}
+		}
+
 		//========================================//
 		// add North, south, east, and west faces //
 		//========================================//
@@ -363,10 +402,10 @@ public class ColumnBox
 			}
 			
 			boolean adjOverVoid = !RenderDataPointUtil.doesDataPointExist(adjBelowPoint);
-			boolean adjTransparent = 
-				!adjOverVoid
+			boolean adjacentLeaves = adjacentIsSameDetailLevel && isSeeThroughLeaves(adjPoint, horizontalBlockWidth);
+			boolean adjTransparent = adjacentLeaves || (!adjOverVoid
 				&& RenderDataPointUtil.getAlpha(adjPoint) < 255
-				&& transparencyEnabled;
+				&& transparencyEnabled);
 			
 			byte adjSkyLight = RenderDataPointUtil.getLightSky(adjPoint);
 			byte lightToApply;
@@ -407,11 +446,12 @@ public class ColumnBox
 			{
 				// Adjacent is transparent, use below light
 				lightToApply = RenderDataPointUtil.getLightSky(adjBelowPoint);
+				if (adjacentLeaves) lightToApply = (byte) Math.max(lightToApply, adjSkyLight);
 			}
 			
 			
 			// Apply light to the range [adjMinY, adjMaxY)
-			applyLightToRangeAndPopulateNewSgements(segments, newSegments, adjMinY, adjMaxY, lightToApply, true);
+			applyLightToRangeAndPopulateNewSgements(segments, newSegments, adjMinY, adjMaxY, lightToApply, !adjacentLeaves);
 			{
 				// swap references so we can use the newly populated segments
 				LongArrayList temp = segments;

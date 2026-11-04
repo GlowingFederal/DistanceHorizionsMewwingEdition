@@ -35,13 +35,14 @@ public class VegetationColumnTest
 	private static final IBlockStateWrapper AIR = block("air", false, true, 0, EDhApiBlockMaterial.AIR.index);
 	private static final IBlockStateWrapper LEAVES = block("leaves", true, false, 16, EDhApiBlockMaterial.LEAVES.index);
 	private static final IBlockStateWrapper SAME_COLOR_TERRAIN = block("same_color_terrain", true, false, 16, EDhApiBlockMaterial.STONE.index);
+	private static final IBlockStateWrapper LEAF_COLOR_TERRAIN = block("leaf_color_terrain", true, false, 16, EDhApiBlockMaterial.STONE.index);
 	private static final int STONE_COLOR = 0xff808080, FLOWER_COLOR = 0xffff2020, LEAF_COLOR = 0xff408020;
 	private static final IClientLevelWrapper LEVEL = (IClientLevelWrapper) Proxy.newProxyInstance(
 		IClientLevelWrapper.class.getClassLoader(), new Class<?>[]{IClientLevelWrapper.class}, (proxy, method, args) -> {
 			if (method.getName().equals("getMinHeight")) return 0;
 			if (method.getName().equals("getBlockColor")) {
 				Object block = args[3];
-				return block == FLOWER || block == SAME_COLOR_TERRAIN ? FLOWER_COLOR : block == LEAVES ? LEAF_COLOR : block == AIR ? 0 : STONE_COLOR;
+				return block == FLOWER || block == SAME_COLOR_TERRAIN ? FLOWER_COLOR : block == LEAVES || block == LEAF_COLOR_TERRAIN ? LEAF_COLOR : block == AIR ? 0 : STONE_COLOR;
 			}
 			throw new AssertionError("Unexpected level access: " + method);
 		});
@@ -136,10 +137,46 @@ public class VegetationColumnTest
 		assertPoint(result[1], 0, 64, STONE_COLOR, TERRAIN.getMaterialId());
 	}
 
+	@Test public void identicalLeafAndTerrainColorsDoNotMergeMaterials() throws Exception
+	{
+		long[] result = transform((byte)0, true, LEAVES, LEAF_COLOR_TERRAIN);
+		assertPoint(result[0], 64, 65, LEAF_COLOR, LEAVES.getMaterialId());
+		assertPoint(result[1], 0, 64, LEAF_COLOR, LEAF_COLOR_TERRAIN.getMaterialId());
+	}
+
 	@Test public void airGapStopsTintTransfer() throws Exception
 	{
 		long[] result = transform((byte) 0, true, FLOWER, AIR, TERRAIN);
 		assertPoint(result[0], 0, 64, STONE_COLOR, TERRAIN.getMaterialId());
+	}
+
+	@Test public void crossedPlantsNeverTintCliffsEvenWhenFoliageIsDisabled() throws Exception
+	{
+		boolean oldGrass = Config.Client.Advanced.Graphics.Foliage.lodGrass.get();
+		boolean oldFlowers = Config.Client.Advanced.Graphics.Foliage.lodFlowers.get();
+		try {
+			for (boolean enabled : new boolean[]{false, true}) {
+				Config.Client.Advanced.Graphics.Foliage.lodGrass.setWithoutFiringEvents(enabled);
+				Config.Client.Advanced.Graphics.Foliage.lodFlowers.setWithoutFiringEvents(enabled);
+				for (byte kind : new byte[]{1, 2}) {
+					IBlockStateWrapper plant = new TestBlockStateWrapper("mod:crossed_plant") {
+						@Override public byte getLodVegetationKind() { return kind; }
+						@Override public boolean isSolid() { return false; }
+						@Override public int getOpacity() { return 0; }
+					};
+					for (byte detail : new byte[]{0, 2}) {
+						for (boolean preserve : new boolean[]{false, true}) {
+							long[] result = transform(detail, preserve, plant, TERRAIN);
+							assertPoint(result[0], 0, 64, STONE_COLOR, TERRAIN.getMaterialId());
+							assertEquals(0, result[1]);
+						}
+					}
+				}
+			}
+		} finally {
+			Config.Client.Advanced.Graphics.Foliage.lodGrass.setWithoutFiringEvents(oldGrass);
+			Config.Client.Advanced.Graphics.Foliage.lodFlowers.setWithoutFiringEvents(oldFlowers);
+		}
 	}
 
 	private static long[] transform(byte detail, boolean preserveTint, IBlockStateWrapper... blocks) throws Exception

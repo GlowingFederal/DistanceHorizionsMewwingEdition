@@ -222,6 +222,17 @@ public class TextureAtlasSpriteWrapper
 	@Nullable
 	public static TextureAtlasSprite resolveFaceSprite(IBlockState blockstate, int sideOrdinal)
 	{
+		// The transformer supplies the lower half's type in transient top states.
+		if (blockstate.getBlock().getClass() == net.minecraft.block.BlockDoublePlant.class && (blockstate.getMeta() & 8) != 0)
+		{
+			String[] names = { "sunflower", "syringa", "grass", "fern", "rose", "paeonia" };
+			int type = blockstate.getMeta() & 7;
+			if (type < names.length)
+			{
+				TextureAtlasSprite top = findBlockAtlasSprite("double_plant_" + names[type] + "_top");
+				if (top != null) return top;
+			}
+		}
 		IIcon icon = null;
 		
 		// GregTech
@@ -285,6 +296,15 @@ public class TextureAtlasSpriteWrapper
 			LOGGER.warn("Unusable icon for block [" + key + "] (" + block.getClass().getName() + ") side [" + sideOrdinal + "]: "
 				+ (icon != null ? "[" + icon.getIconName() + "] (" + icon.getClass().getName() + ")" : "[null]"));
 		}
+	}
+
+	public static TextureAtlasSprite findBlockAtlasSprite(String name)
+	{
+		ITextureObject atlas = Minecraft.getMinecraft().getTextureManager().getTexture(TextureMap.locationBlocksTexture);
+		if (!(atlas instanceof TextureMap)) return null;
+		TextureAtlasSprite sprite = ((TextureMap) atlas).getAtlasSprite(name);
+		// Missing atlas entries return the missing-texture sprite, which also has data.
+		return hasSpriteData(sprite) && name.equals(sprite.getIconName()) ? sprite : null;
 	}
 
 	private static boolean hasSpriteData(@Nullable IIcon icon)

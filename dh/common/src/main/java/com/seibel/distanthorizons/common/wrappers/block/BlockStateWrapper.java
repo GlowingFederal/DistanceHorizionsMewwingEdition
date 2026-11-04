@@ -230,6 +230,13 @@ public class BlockStateWrapper implements IBlockStateWrapper
 		
 		// guess block state
 		BlockStateWrapper wrapperGuess = (BlockStateWrapper) guess;
+		#if MC_VER <= MC_1_7_10
+		// Adapted from Retro 4268229: compare native block/meta without temporary FakeBlockStates.
+		if (block == null || block == Blocks.air) return AIR;
+		if (wrapperGuess.blockState != null && wrapperGuess.blockState.getBlock() == block
+			&& wrapperGuess.blockState.getMeta() == meta) return wrapperGuess;
+		return fromBlockState(block, meta, levelWrapper);
+		#else
 		#if MC_VER <= MC_1_12_2
 		IBlockState guessBlockState;
 		#else
@@ -286,6 +293,7 @@ public class BlockStateWrapper implements IBlockStateWrapper
 	    #else 
 		return fromBlockState(blockState, levelWrapper);
 		#endif
+		#endif
 	}
 
 	#if MC_VER <= MC_1_7_10
@@ -307,10 +315,6 @@ public class BlockStateWrapper implements IBlockStateWrapper
 		{
 			return AIR;
 		}
-		
-		#if MC_VER <= MC_1_7_10
-		FakeBlockState blockState = new FakeBlockState(block, meta);
-		#endif
 		
 		// pooling wrappers significantly improves chunk->LOD processing speed
 		// and also reduces GC pressure
@@ -347,6 +351,10 @@ public class BlockStateWrapper implements IBlockStateWrapper
 			}
 			
 			
+			#if MC_VER <= MC_1_7_10
+			// Retro optimization: cached states need no temporary allocation.
+			FakeBlockState blockState = new FakeBlockState(block, meta);
+			#endif
 			// create a wrapper specifically for the API event to use
 			BlockStateWrapper apiWrapper = new BlockStateWrapper(blockState, levelWrapper, null);
 			DhApiBlockStateWrapperCreatedEvent.EventParam eventParam = new DhApiBlockStateWrapperCreatedEvent.EventParam(apiWrapper);
@@ -697,7 +705,8 @@ public class BlockStateWrapper implements IBlockStateWrapper
 		
 		boolean isLeafBlock;
 		#if MC_VER <= MC_1_7_10
-		isLeafBlock = blockState.getBlock() instanceof BlockLeavesBase;
+		isLeafBlock = blockState.getBlock() instanceof BlockLeavesBase
+			|| blockState.getMaterial() == net.minecraft.block.material.Material.leaves;
 		#elif MC_VER <= MC_1_12_2
 		isLeafBlock = blockState.getBlock() instanceof BlockLeaves;
 		#else 
@@ -1395,6 +1404,41 @@ public class BlockStateWrapper implements IBlockStateWrapper
 	
 	@Override
 	public int getOpacity() { return this.opacity; }
+
+	@Override
+	public byte getLodVegetationKind()
+	{
+		#if MC_VER <= MC_1_7_10
+		if (this.blockState == null || this.isLiquid) return 0;
+		Block block = this.blockState.getBlock();
+		int renderType = block.getRenderType();
+		// Use Minecraft's actual crossed-plant renderers, including modded implementations.
+		if (renderType != 1 && renderType != 40) return 0;
+		if (!(block instanceof BlockBush) && !(block instanceof net.minecraftforge.common.IPlantable)
+			&& this.blockState.getMaterial() != net.minecraft.block.material.Material.plants
+			&& this.blockState.getMaterial() != net.minecraft.block.material.Material.vine) return 0;
+		int type = this.blockState.getMeta() & 7;
+		return (byte) (block instanceof BlockTallGrass
+			|| (block instanceof BlockDoublePlant && (type == 2 || type == 3)) ? 1 : 2);
+		#else
+		return 0;
+		#endif
+	}
+
+	@Override
+	public IBlockStateWrapper getPlantRenderState(IBlockStateWrapper below, ILevelWrapper level)
+	{
+		#if MC_VER <= MC_1_7_10
+		if (this.blockState != null && this.blockState.getBlock() instanceof BlockDoublePlant
+			&& (this.blockState.getMeta() & 8) != 0 && below instanceof BlockStateWrapper)
+		{
+			IBlockState lower = ((BlockStateWrapper) below).blockState;
+			if (lower != null && lower.getBlock() == this.blockState.getBlock() && (lower.getMeta() & 8) == 0)
+				return fromBlockState(lower.getBlock(), 8 | (lower.getMeta() & 7), level);
+		}
+		#endif
+		return this;
+	}
 	
 	@Override
 	public int getLightEmission() { return getLightEmission(this.blockState); }

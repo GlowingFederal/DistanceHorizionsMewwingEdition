@@ -58,6 +58,7 @@ public final class BufferQuad
 	public byte skyLight;
 	public byte blockLight;
 	public EDhDirection direction;
+	public boolean seeThrough;
 	
 	public boolean hasError = false;
 	
@@ -101,6 +102,7 @@ public final class BufferQuad
 		this.skyLight = skylight;
 		this.blockLight = blockLight;
 		this.direction = direction;
+		this.seeThrough = false;
 		this.sortKeyEastWest = computeSortKey(direction, true);
 		this.sortKeyNorthSouth = computeSortKey(direction, false);
 	}
@@ -151,6 +153,7 @@ public final class BufferQuad
 	 */
 	public boolean tryMerge(BufferQuad quad, BufferMergeDirectionEnum mergeDirection)
 	{
+		if (this.seeThrough != quad.seeThrough) return false;
 		if (quad.hasError || this.hasError)
 		{
 			return false;

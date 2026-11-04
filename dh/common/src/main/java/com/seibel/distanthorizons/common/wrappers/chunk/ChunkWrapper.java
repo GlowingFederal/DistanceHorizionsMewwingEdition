@@ -207,17 +207,39 @@ public class ChunkWrapper implements IChunkWrapper
 	//region
 	
 	#if MC_VER <= MC_1_7_10
+    private static final ClassValue<Boolean> CUSTOM_BIOME_LOOKUP = new ClassValue<Boolean>()
+    {
+        @Override protected Boolean computeValue(Class<?> worldClass)
+        {
+            Class<?> vanillaOwner = net.minecraft.world.WorldProvider.class.isAssignableFrom(worldClass)
+                ? net.minecraft.world.WorldProvider.class : net.minecraft.world.World.class;
+            boolean found = false;
+            for (java.lang.reflect.Method method : worldClass.getMethods())
+                if ((method.getName().equals("getBiomeGenForCoords") || method.getName().equals("func_72807_a")
+                    || method.getName().equals("getBiomeGenForCoordsBody"))
+                    && java.util.Arrays.equals(method.getParameterTypes(), new Class<?>[] { int.class, int.class }))
+                {
+                    found = true;
+                    if (method.getDeclaringClass() != vanillaOwner) return true;
+                }
+            return !found; // unknown transformation: preserve the world's override
+        }
+    };
 	private static BiomeGenBase[] fillBiomeMap(Chunk chunk)
 	{
-		// We must use World.getBiomeGenForCoords since mods like LOTR override those functions. Getting it from the chunk is incorrect.
+		// Unregistered/generated chunks must sample their own biome array, not a different
+        // chunk (or the provider fallback) at the same world position. Preserve custom
+        // world biome overrides, such as LOTR, at this compatibility boundary.
+        boolean customLookup = CUSTOM_BIOME_LOOKUP.get(chunk.worldObj.getClass())
+            || CUSTOM_BIOME_LOOKUP.get(chunk.worldObj.provider.getClass());
 		BiomeGenBase[] biomeArray = new BiomeGenBase[LodUtil.CHUNK_WIDTH * LodUtil.CHUNK_WIDTH];
 		for (int x = 0; x < LodUtil.CHUNK_WIDTH; x++)
 		{
 			for (int z = 0; z < LodUtil.CHUNK_WIDTH; z++)
 			{
-				biomeArray[x * LodUtil.CHUNK_WIDTH + z] = chunk.worldObj.getBiomeGenForCoords(
-					(chunk.xPosition << 4) + x, 
-					(chunk.zPosition << 4) + z);
+				biomeArray[x * LodUtil.CHUNK_WIDTH + z] = customLookup
+                    ? chunk.worldObj.getBiomeGenForCoords((chunk.xPosition << 4) + x, (chunk.zPosition << 4) + z)
+                    : chunk.getBiomeGenForWorldCoords(x, z, chunk.worldObj.getWorldChunkManager());
 			}
 		}
 		return biomeArray;
