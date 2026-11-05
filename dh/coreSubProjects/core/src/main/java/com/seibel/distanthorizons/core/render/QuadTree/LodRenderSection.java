@@ -87,6 +87,14 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 	 * for re-creating missing nodes.
 	 */
 	public volatile boolean renderDataDirty = false;
+    private long renderDataRevision;
+
+    /** Serialize invalidation with publication so an older upload cannot consume a newer refresh. */
+    public synchronized void markRenderDataDirty()
+    {
+        this.renderDataRevision++;
+        this.renderDataDirty = true;
+    }
 	public boolean queuedMissingSectionsForRetrieval = false;
 	
 	/** this reference is necessary so we can determine what VBO to render */
@@ -151,11 +159,15 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 		}
 		
 		CompletableFuture<Void> future = new CompletableFuture<>();
+        final long buildRevision = this.renderDataRevision;
 		future.handle((voidObj, throwable) ->
 		{
 			// the task is done, we don't need to track these anymore
-			this.getAndBuildRenderDataFutureRef.compareAndSet(future, null);
-			this.getAndBuildRenderDataRunnable = null;
+            synchronized (this)
+            {
+                if (this.getAndBuildRenderDataFutureRef.compareAndSet(future, null))
+                    this.getAndBuildRenderDataRunnable = null;
+            }
 			
 			return null;
 		});
@@ -195,7 +207,7 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 						ArrayList<ByteBuffer> transparentBuffers = lodQuadBuilder.makeTransparentVertexBuffers(transparentCheckout);
 						
 						// uploading will primarily happen on the render thread
-						this.uploadToGpuAsync(future, opaqueBuffers, transparentBuffers, lodQuadBuilder.coverage)
+						this.uploadToGpuAsync(future, buildRevision, opaqueBuffers, transparentBuffers, lodQuadBuilder.coverage)
 							// Join is used to prevent queuing up potentially thousands of
 							// upload tasks (each requiring their own staging buffer)
 							// causing an explosion of pooled memory use.
@@ -330,6 +342,7 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
 	
 	private synchronized CompletableFuture<LodBufferContainer> uploadToGpuAsync(
 		CompletableFuture<Void> parentFuture,
+        long buildRevision,
 		ArrayList<ByteBuffer> opaqueBuffers,
 		ArrayList<ByteBuffer> transparentBuffers,
         com.seibel.distanthorizons.core.dataObjects.render.LodCoverage coverage)
@@ -361,7 +374,9 @@ public class LodRenderSection implements IDebugRenderable, AutoCloseable
                 synchronized (this)
                 {
                     // Unloaded sections must never publish late uploads.
-                    if (this.closed || parentFuture.isCancelled() || !bufferContainer.buffersUploaded)
+                    if (this.closed || parentFuture.isCancelled()
+                        || this.getAndBuildRenderDataFutureRef.get() != parentFuture
+                        || this.renderDataRevision != buildRevision || !bufferContainer.buffersUploaded)
                     {
                         bufferContainer.close();
                         return;

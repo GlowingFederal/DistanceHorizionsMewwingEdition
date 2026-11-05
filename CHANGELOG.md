@@ -42,3 +42,14 @@
 - Keep native LOD background coverage inside the nominal vanilla radius rather than discarding it without evidence of rendered vanilla terrain. Use actual vanilla/LOD depth to guard the final screen-door handoff, and bound the physical 1.7.10 near plane above mountains as well as near the ground. Base the legacy vanilla handoff on horizontal distance so camera height does not displace nearby vanilla terrain.
 - Sample ordinary legacy chunk biomes from the chunk being captured while retaining custom world and world-provider biome overrides. Resolve legacy block tint neighbors from the same full-data snapshot, independent of live chunk availability, and release thread-local snapshot references after tint calculation. Existing full-data databases and network formats are retained.
 - Correct the README water limitation: missing terrain in front of or beneath supported water LODs is a coverage problem. Document presentation controls and bounded outgoing geometry retention.
+
+2026-11-04 23:11 — Release stale coarse meshes after distance and coverage changes
+
+- Compare outgoing presentation coverage against the current render bounds and its known columns. Finer cached meshes can now replace a coarse fallback without waiting for terrain outside the render radius or columns the fallback never contained. Continue retaining genuinely missing in-range terrain and the existing smooth handoff and buffer leases.
+- Version section invalidations and reject uploads built before a newer refresh or after task ownership changes. In-flight refresh notifications survive upload completion and retry through the existing bounded loader; no continuous region rebuild, chunk regeneration, database migration, or generation-distance change is required.
+- Schedule dirty or failed retained child meshes through the same loader as ordinary tree traversal. Children temporarily kept visible while a parent lacks coverage can now finish pending refinements without a proximity change or a second data-update notification.
+
+2026-11-05 00:08 — Align legacy LODs with the actual camera
+
+- Capture the camera offset from vanilla's unmodified model-view matrix, then remove that translation from DH's camera-relative copy. Previously the native 1.7.10 renderer subtracted the displaced camera position and applied the same translation again, shifting terrain and foliage relative to vanilla geometry, especially in both third-person views.
+- Use the same normalized view for LOD geometry, frustum construction, temporal reprojection, and vanilla-depth reconstruction. Preserve vanilla's live matrices, camera collision, bobbing and hurt transforms, shader-pack integration, foliage features, and vehicle depth compatibility. Reuse the inverse-matrix workspace rather than allocating and inverting on every camera-position query; no configuration, save, protocol, or dependency changes are required.

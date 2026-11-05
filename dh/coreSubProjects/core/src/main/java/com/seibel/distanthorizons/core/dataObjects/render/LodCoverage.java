@@ -19,6 +19,7 @@ public final class LodCoverage
         return new LodCoverage(columns);
     }
     public boolean isEmpty() { return this.columns.isEmpty(); }
+    public boolean hasColumn(int x, int z) { return this.columns.get(x * FullDataSourceV2.WIDTH + z); }
     public boolean isComplete() { return this.columns.cardinality() == FullDataSourceV2.WIDTH * FullDataSourceV2.WIDTH; }
     public boolean contains(LodCoverage previous)
     {

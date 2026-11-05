@@ -309,7 +309,7 @@ public class LodQuadTree extends QuadTree<LodRenderSection> implements IDebugRen
 					// when this node comes back into render distance
 					// we'll need to re-load it since the full data
 					// may have been modified while it was out of bounds
-					renderSection.renderDataDirty = true;
+					renderSection.markRenderDataDirty();
 				}
 			}
 		);
@@ -592,11 +592,7 @@ public class LodQuadTree extends QuadTree<LodRenderSection> implements IDebugRen
 		//region
 		
 		// load every node for rendering
-		if (!renderSection.gpuUploadInProgress()
-			&& !renderSection.gpuUploadComplete())
-		{
-			this.tickNodeHolder.addLoadSection(renderSection);
-		}
+        this.queueRenderSectionLoad(renderSection);
 		
 		
 		byte expectedDetailLevel = this.calcExpectedDetailLevel(playerPos, quadNode.sectionPos);
@@ -687,6 +683,10 @@ public class LodQuadTree extends QuadTree<LodRenderSection> implements IDebugRen
 			return true;
 		}
 		
+        // Retained child frontiers bypass recursivelyUpdateRenderSectionNode.
+        // They still need retries after an invalidated, rejected, or failed upload.
+        this.queueRenderSectionLoad(quadNode.value);
+
         // Coarsening must keep the existing child frontier until the parent has coverage.
         if ((quadNode.value == null || !quadNode.value.hasCompleteCoverage()) && this.hasReadyDescendant(quadNode))
         {
@@ -710,6 +710,12 @@ public class LodQuadTree extends QuadTree<LodRenderSection> implements IDebugRen
 	}
 	
 	
+    private void queueRenderSectionLoad(@Nullable LodRenderSection section)
+    {
+        if (section != null && !section.gpuUploadInProgress() && !section.gpuUploadComplete())
+            this.tickNodeHolder.addLoadSection(section);
+    }
+
     private boolean hasReadyDescendant(QuadNode<LodRenderSection> node)
     {
         for (int i = 0; i < 4; i++)
@@ -765,31 +771,24 @@ public class LodQuadTree extends QuadTree<LodRenderSection> implements IDebugRen
 	private void reloadQueuedSections(HashSet<LodRenderSection> sectionsToLoad)
 	{
 		Long pos;
-		HashSet<Long> positionsToRequeue = new HashSet<>();
+		HashSet<Long> invalidatedPositions = new HashSet<>();
 		while ((pos = this.sectionsToReload.poll()) != null)
 		{
-			if (positionsToRequeue.contains(pos))
+			if (!invalidatedPositions.add(pos))
 			{
-				// don't attempt to re-load positions that are already in the process of reloading
+				// Coalesce duplicate notifications from this tick.
 				continue;
 			}
 			
 			LodRenderSection renderSection = this.tryGetValue(pos);
 			if (renderSection != null)
 			{
-				// A neighbor can finish while this section's first mesh is still
-				// uploading. Retain that refresh even before a GPU buffer exists.
-				if (renderSection.gpuUploadInProgress())
-				{
-					positionsToRequeue.add(pos);
-					continue;
-				}
-                renderSection.renderDataDirty = true;
+                // Invalidate in-flight snapshots as well; publication checks the revision.
+                renderSection.markRenderDataDirty();
                 sectionsToLoad.add(renderSection);
 
 			}
 		}
-		this.sectionsToReload.addAll(positionsToRequeue);
 	}
 	private void loadQueuedSections(DhBlockPos2D playerPos, HashSet<LodRenderSection> nodesNeedingLoading)
 	{
@@ -1278,7 +1277,7 @@ public class LodQuadTree extends QuadTree<LodRenderSection> implements IDebugRen
 					else
 					{
 						// mark the node for re-loading
-						quadNode.value.renderDataDirty = true;
+						quadNode.value.markRenderDataDirty();
 					}
 				}
 			}

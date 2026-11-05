@@ -74,8 +74,7 @@ public class RenderBufferHandler implements AutoCloseable
 	private final LodPresentation<LodBufferContainer> presentation = new LodPresentation<>(LodBufferContainer::releaseFromRender);
     private final ArrayList<LodBufferContainer> desiredBuffers = new ArrayList<>();
     private final ArrayList<LodBufferContainer> presentedBuffers = new ArrayList<>();
-    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LodBufferContainer> desiredByPos = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
-    private final it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap coveredArea = new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
+    private final LodCoverageIndex desiredCoverage = new LodCoverageIndex();
     private final it.unimi.dsi.fastutil.longs.LongOpenHashSet fallbackPositions = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
     private final it.unimi.dsi.fastutil.longs.LongOpenHashSet fallbackAncestors = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
     private final ArrayList<LodBufferContainer> fallbackBuffers = new ArrayList<>();
@@ -261,33 +260,20 @@ public class RenderBufferHandler implements AutoCloseable
     /** Preserve live coverage even across hard cache clears and partially restored frontiers. */
     private void preserveUnreplacedCoverage()
     {
-        this.desiredByPos.clear();
-        this.coveredArea.clear();
+        DhBlockPos2D center = this.lodQuadTree.getCenterBlockPos();
+        int radius = this.lodQuadTree.diameterInBlocks() / 2;
+        this.desiredCoverage.reset(center.x - radius, center.z - radius, center.x + radius, center.z + radius);
         this.fallbackBuffers.clear();
         this.fallbackPositions.clear();
         this.fallbackAncestors.clear();
         for (LodBufferContainer buffer : this.desiredBuffers)
         {
-            this.desiredByPos.put(buffer.pos, buffer);
-            if (!buffer.coverage.isComplete()) continue;
-            long width = DhSectionPos.getBlockWidth(buffer.pos);
-            long area = width * width;
-            for (long pos = buffer.pos; DhSectionPos.getDetailLevel(pos) <= 30; pos = DhSectionPos.getParentPos(pos))
-                this.coveredArea.addTo(pos, area);
+            this.desiredCoverage.add(buffer.pos, buffer.coverage);
         }
         for (LodBufferContainer previous : this.presentation.current())
         {
             if (!this.lodQuadTree.isSectionPosInBounds(previous.pos)) continue;
-            LodBufferContainer exact = this.desiredByPos.get(previous.pos);
-            if (exact != null && exact.coverage.contains(previous.coverage)) continue;
-            long width = DhSectionPos.getBlockWidth(previous.pos);
-            boolean covered = this.coveredArea.get(previous.pos) >= width * width;
-            for (long pos = DhSectionPos.getParentPos(previous.pos); !covered && DhSectionPos.getDetailLevel(pos) <= 30; pos = DhSectionPos.getParentPos(pos))
-            {
-                LodBufferContainer parent = this.desiredByPos.get(pos);
-                covered = parent != null && parent.coverage.isComplete();
-            }
-            if (covered) continue;
+            if (this.desiredCoverage.covers(previous.pos, previous.coverage)) continue;
             this.fallbackBuffers.add(previous);
             this.fallbackPositions.add(previous.pos);
             for (long pos = previous.pos; DhSectionPos.getDetailLevel(pos) <= 30; pos = DhSectionPos.getParentPos(pos))
@@ -372,7 +358,7 @@ public class RenderBufferHandler implements AutoCloseable
             this.loadedNearToFarBuffers.clear();
             this.presentedBuffers.clear();
             this.fallbackBuffers.clear();
-            this.desiredByPos.clear();
+            this.desiredCoverage.reset(0, 0, 0, 0);
         });
     }
 	

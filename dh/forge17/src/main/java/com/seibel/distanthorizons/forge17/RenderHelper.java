@@ -2,6 +2,7 @@ package com.seibel.distanthorizons.forge17;
 
 import java.nio.FloatBuffer;
 
+import com.seibel.distanthorizons.common.backports.Camera;
 import com.seibel.distanthorizons.common.commonMixins.MixinVanillaFogCommon;
 import com.seibel.distanthorizons.common.wrappers.minecraft.MinecraftRenderWrapper;
 import com.seibel.distanthorizons.core.dependencyInjection.ModAccessorInjector;
@@ -37,7 +38,10 @@ public class RenderHelper
 	public static DhMat4f getProjectionMatrix() { return new DhMat4f(projectionMatrix); }
 	
 	public static void setModelViewMatrixFromBuffer(FloatBuffer modelviewBuffer)
-	{ modelViewMatrix = McObjectConverter.convert(new Matrix4f(modelviewBuffer)); }
+	{
+		modelViewMatrix = McObjectConverter.convert(new Matrix4f(modelviewBuffer));
+		Camera.INSTANCE.captureModelView(modelViewMatrix);
+	}
 	public static void setProjectionMatrixFromBuffer(FloatBuffer projectionBuffer)
 	{ projectionMatrix = McObjectConverter.convert(new Matrix4f(projectionBuffer)); }
 	
