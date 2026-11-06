@@ -20,6 +20,18 @@ public final class ShaderPackLodPresentation
         result.put(PatchShaderType.FRAGMENT, MAIN.matcher(fragment).replaceFirst("void dhp_packMain()")
             + "\n" + GlShader.loadFile("assets/distanthorizons/shaders/terrain/gl/presentation.glsl", false)
             + "\nvoid main() { dhp_present(); dhp_packMain(); }\n");
+        String vertex = original.get(PatchShaderType.VERTEX);
+        if (vertex != null && MAIN.matcher(vertex).find()
+            && original.get(PatchShaderType.GEOMETRY) == null
+            && original.get(PatchShaderType.TESS_CONTROL) == null && original.get(PatchShaderType.TESS_EVAL) == null)
+        {
+            result.put(PatchShaderType.VERTEX, MAIN.matcher(vertex).replaceFirst("void dhc_packVertex()")
+                + "\nout vec3 dhc_Position;\nvoid main() { dhc_packVertex(); dhc_Position = vec3(vPosition.xyz) + modelOffset; }\n");
+            result.put(PatchShaderType.FRAGMENT, MAIN.matcher(result.get(PatchShaderType.FRAGMENT)).replaceFirst("void dhc_packFragment()")
+                + "\nin vec3 dhc_Position;\n"
+                + GlShader.loadFile("assets/distanthorizons/shaders/terrain/gl/vanilla_coverage.glsl", false)
+                + "\nvoid main() { dhc_clip(dhc_Position); dhc_packFragment(); }\n");
+        }
         return result;
     }
 }

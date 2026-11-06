@@ -132,7 +132,9 @@ public class GlShader
 				String line;
 				while ((line = reader.readLine()) != null)
 				{
-					if (line.equals("// DH_PRESENTATION_SHADER"))
+					if (line.equals("// DH_VANILLA_COVERAGE_SHADER"))
+                        stringBuilder.append(loadFile("assets/distanthorizons/shaders/terrain/gl/vanilla_coverage.glsl", false));
+                    else if (line.equals("// DH_PRESENTATION_SHADER"))
                         stringBuilder.append(loadFile("assets/distanthorizons/shaders/terrain/gl/presentation.glsl", false));
                     else if (line.equals("// DH_FOLIAGE_SHADER"))
 						stringBuilder.append(loadFile("assets/distanthorizons/shaders/terrain/gl/foliage.glsl", false));

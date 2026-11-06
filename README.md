@@ -75,6 +75,8 @@ Uploaded terrain uses readiness-based handoffs. Previous meshes remain available
 
 In **Advanced → Graphics → Quality** (`[client.advanced.graphics.quality]`), `smoothLodTransitions` defaults to `true` and `lodTransitionDurationMs` defaults to `350` milliseconds (range `0`–`2000`). Disable animation or set the duration to zero to avoid retaining an outgoing render frontier. Coverage safeguards remain enabled. Transitions use complementary screen-door masks with ordinary depth writes, without rebuilding geometry. At most one outgoing frontier is retained until its handoff finishes. Native rendering uses actual vanilla and LOD depth for the final handoff; Angelica shader programs receive the same mesh-presentation mask while retaining their own lighting and distance-fade behavior.
 
+Completed normal chunk meshes in the current renderer's visible columns own their section volumes, including empty space around stairs, slabs, fences, and leaf cutouts. Native and supported Angelica terrain programs exclude overlapping LOD fragments from those volumes; unfinished sections and columns outside the normal draw list retain their LOD background. These client rendering decisions require no world regeneration or cache deletion. Outside normal chunk coverage, structures still use DH's simplified voxel geometry.
+
 ### Foliage controls
 
 Open **Advanced → Graphics → Foliage**, or edit `[client.advanced.graphics.foliage]` in `config/DistantHorizons.toml`:

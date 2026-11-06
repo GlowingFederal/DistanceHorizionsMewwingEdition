@@ -106,6 +106,12 @@ public final class ShaderPackFoliage
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	public static boolean registerSampler(Object builder)
 	{
+		return registerSampler(builder, "dhf_BlockAtlas", () -> Math.max(0, DhApiRenderProxy.getDhBlockRatioAtlasTextureGlId));
+	}
+
+	@SuppressWarnings({"unchecked", "rawtypes"})
+	public static boolean registerSampler(Object builder, String name, IntSupplier texture)
+	{
 		try
 		{
 			// Angelica versions differ in their sampler overloads. Resolve this optional boundary once per program.
@@ -116,7 +122,7 @@ public final class ShaderPackFoliage
 					|| !types[0].isEnum() || types[1] != IntSupplier.class || types[3] != String[].class) continue;
 				Object texture2d = Enum.valueOf((Class) types[0], "TEXTURE_2D");
 				return (Boolean) method.invoke(builder, texture2d,
-					(IntSupplier) () -> Math.max(0, DhApiRenderProxy.getDhBlockRatioAtlasTextureGlId), null, new String[]{"dhf_BlockAtlas"});
+					texture, null, new String[]{name});
 			}
 		}
 		catch (ReflectiveOperationException | RuntimeException ex) { LOGGER.warn("Unable to register optional LOD foliage sampler.", ex); }

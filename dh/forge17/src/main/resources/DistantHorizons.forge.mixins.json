@@ -24,6 +24,8 @@
     "MixinNetHandlerPlayClient",
     "MixinOptionsScreen",
     "MixinRenderGlobal",
+    "MixinWorldRendererCoverage",
+    "MixinAngelicaSectionCoverage",
     "MixinTesselator",
     "MixinTextureAtlasSprite",
     "MixinTextureMap"

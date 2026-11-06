@@ -14,6 +14,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Minecraft.class)
 public class MixinMinecraft
 {
+	@Inject(method = "loadWorld(Lnet/minecraft/client/multiplayer/WorldClient;Ljava/lang/String;)V", at = @At("HEAD"))
+	private void dh$resetMeshOwnership(CallbackInfo ci)
+	{
+		com.seibel.distanthorizons.core.render.VanillaSectionCoverage.INSTANCE.clear();
+		com.seibel.distanthorizons.common.render.openGl.terrain.GlVanillaSectionCoverage.INSTANCE.free();
+	}
 	
 	@Inject(method = "startGame", at = @At("TAIL"))
 	private void onInit(CallbackInfo ci)

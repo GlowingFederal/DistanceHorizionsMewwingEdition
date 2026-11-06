@@ -26,6 +26,9 @@ public class RenderHelper
 	
 	private static DhMat4f modelViewMatrix;
 	private static DhMat4f projectionMatrix;
+	public static boolean usesAngelica() { return ANGELICA_ACCESSOR != null; }
+	public static void updateVanillaSectionVisibility()
+	{ if (ANGELICA_ACCESSOR != null) ANGELICA_ACCESSOR.updateVanillaSectionVisibility(); }
 	
 	
 	
@@ -56,6 +59,7 @@ public class RenderHelper
 	
 	public static void renderLods() 
     {
+		updateVanillaSectionVisibility();
         ClientApi.RENDER_STATE.mcModelViewMatrix = getModelViewMatrix();
         ClientApi.RENDER_STATE.mcProjectionMatrix = getProjectionMatrix();
         ClientApi.RENDER_STATE.clientLevelWrapper = ClientLevelWrapper.getWrapper(Minecraft.getMinecraft().theWorld);

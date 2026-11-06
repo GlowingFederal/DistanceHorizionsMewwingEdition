@@ -16,6 +16,7 @@ out vec4 fragColor;
 // see AbstractBlockTextureAtlas.TILES_PER_ROW
 // DH_FOLIAGE_SHADER
 // DH_PRESENTATION_SHADER
+// DH_VANILLA_COVERAGE_SHADER
 
 // Fade/Clip Uniforms
 uniform float uClipDistance = 0.0;
@@ -95,6 +96,7 @@ float bayerMatrix4x4(vec2 st)
 
 void main()
 {
+    dhc_clip(vertexWorldPos);
     dhp_present();
     fragColor = vertexColor;
     float viewDist = length(vertexWorldPos);

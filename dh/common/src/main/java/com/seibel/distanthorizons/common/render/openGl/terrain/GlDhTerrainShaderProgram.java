@@ -92,6 +92,9 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
 	// fragment shader uniforms
 	public int uClipDistance = -1;
     private int presentationMin, presentationMax;
+    #if MC_VER <= MC_1_7_10
+    private int coverageSampler, coverageOffset, coverageEnabled;
+    #endif
 	public int uDitherDhRendering = -1;
 	
 	// Noise Uniforms
@@ -147,6 +150,11 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
 		
 		// Fog/Clip Uniforms
 		this.uClipDistance = this.getUniformLocation("uClipDistance");
+        #if MC_VER <= MC_1_7_10
+        this.coverageSampler = this.getUniformLocation("dhc_Sections");
+        this.coverageOffset = this.getUniformLocation("dhc_Offset");
+        this.coverageEnabled = this.getUniformLocation("dhc_Enabled");
+        #endif
         this.presentationMin = this.getUniformLocation("dhp_Min");
         this.presentationMax = this.getUniformLocation("dhp_Max");
 		
@@ -235,6 +243,14 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
 		combinedMatrix.multiply(renderParameters.dhModelViewMatrix);
 		
 		super.bind();
+		#if MC_VER <= MC_1_7_10
+        GlVanillaSectionCoverage coverage = GlVanillaSectionCoverage.INSTANCE;
+        coverage.update(com.seibel.distanthorizons.common.wrappers.minecraft.MinecraftRenderWrapper.INSTANCE.getCameraExactPosition());
+        coverage.bind();
+        this.setUniform(this.coverageSampler, GlVanillaSectionCoverage.TEXTURE_UNIT);
+        this.setUniform(this.coverageOffset, new DhVec3f(coverage.offsetX, coverage.offsetY, coverage.offsetZ));
+        this.setUniform(this.coverageEnabled, !Config.Client.Advanced.Debugging.lodOnlyMode.get());
+        #endif
 		
 		// uniforms
 		this.setUniform(this.uCombinedMatrix, combinedMatrix);

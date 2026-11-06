@@ -33,5 +33,8 @@ public interface IAngelicaAccessor extends IModAccessor
 	int getDepthTextureId();
 	
 	boolean canDoFadeShader();
+
+	/** Capture current normal chunk draw-list coverage on the render thread. */
+	default void updateVanillaSectionVisibility() { }
 	
 }

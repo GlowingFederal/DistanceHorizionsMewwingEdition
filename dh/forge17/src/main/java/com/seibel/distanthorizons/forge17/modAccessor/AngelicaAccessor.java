@@ -19,9 +19,66 @@ import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
 import cpw.mods.fml.common.versioning.ArtifactVersion;
 import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
+import com.seibel.distanthorizons.core.render.VanillaSectionCoverage;
+import com.gtnewhorizons.angelica.rendering.celeritas.CeleritasWorldRenderer;
+import org.embeddedt.embeddium.impl.render.chunk.RenderSection;
+import org.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderList;
+import org.embeddedt.embeddium.impl.util.iterator.ByteIterator;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.util.Iterator;
 
 public class AngelicaAccessor implements IAngelicaAccessor 
 {
+	private static final MethodHandle GEOMETRY_ITERATOR = findGeometryIterator();
+
+	private static MethodHandle findGeometryIterator()
+	{
+		try
+		{
+			MethodHandle iterator;
+			try { iterator = MethodHandles.publicLookup().findVirtual(ChunkRenderList.class, "sectionsWithGeometryIterator", MethodType.methodType(ByteIterator.class)); }
+			catch (NoSuchMethodException olderAngelica)
+			{
+				iterator = MethodHandles.publicLookup().findVirtual(ChunkRenderList.class, "sectionsWithGeometryIterator", MethodType.methodType(ByteIterator.class, boolean.class));
+				iterator = MethodHandles.insertArguments(iterator, 1, false);
+			}
+			return iterator.asType(MethodType.methodType(ByteIterator.class, Object.class));
+		}
+		catch (ReflectiveOperationException ex) { throw new IllegalStateException("Unsupported Angelica render-list API", ex); }
+	}
+
+	private static ByteIterator geometryIterator(ChunkRenderList list)
+	{
+		try { return (ByteIterator) GEOMETRY_ITERATOR.invokeExact((Object)list); }
+		catch (Throwable ex) { throw new IllegalStateException("Unable to read Angelica's current draw list", ex); }
+	}
+
+	@Override
+	public void updateVanillaSectionVisibility()
+	{
+		VanillaSectionCoverage coverage = VanillaSectionCoverage.INSTANCE;
+		CeleritasWorldRenderer renderer = CeleritasWorldRenderer.getInstance();
+		coverage.beginVisibility();
+		if (renderer != null && renderer.getRenderSectionManager() != null)
+		{
+			Iterator<ChunkRenderList> lists = renderer.getRenderSectionManager().getRenderLists().iterator(false);
+			while (lists.hasNext())
+			{
+				ChunkRenderList list = lists.next();
+				ByteIterator sections = geometryIterator(list);
+				if (sections == null) continue;
+				while (sections.hasNext())
+				{
+					RenderSection section = list.getRegion().getSection(sections.nextByteAsInt());
+					if (section != null && section.isBuilt() && !section.isDisposed())
+						coverage.markVisible(section.getChunkX(), section.getChunkZ());
+				}
+			}
+		}
+		coverage.endVisibility();
+	}
 	
 	public static final String ANGELICA_MOD_ID = "angelica";
 	public static final String MINIMUM_ANGELICA_VERSION = "2.1.5";
