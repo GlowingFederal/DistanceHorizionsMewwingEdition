@@ -102,6 +102,14 @@ void main()
     {
         // fade based on distance from the camera
         vec3 mcVertexWorldPos = calcViewPosition(mcFragmentDepth, uMcInvMvmProj);
+        // Legacy ownership clipping removes LODs replaced by normal chunk meshes.
+        // A remaining, farther LOD is background, not a replacement for this pixel.
+        // Compare reconstructed positions: MC and DH use different projections/depths.
+        if (uHorizontalFade && dot(dhVertexWorldPos, dhVertexWorldPos) > dot(mcVertexWorldPos, mcVertexWorldPos))
+        {
+            fragColor = combinedMcDhColor;
+            return;
+        }
         float mcFragmentDistance = uHorizontalFade ? length(mcVertexWorldPos.xz) : length(mcVertexWorldPos);
 
 

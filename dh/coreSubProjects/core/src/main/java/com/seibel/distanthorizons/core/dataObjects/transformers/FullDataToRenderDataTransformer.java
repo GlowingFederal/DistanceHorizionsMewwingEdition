@@ -422,6 +422,12 @@ public class FullDataToRenderDataTransformer
 				continue;
 			}
 			
+			// UAB stores the plant and source water in one block identity. Keep the
+			// plant for cutout meshing, but use ordinary water for terrain reduction.
+			IBlockStateWrapper plantSource = block;
+			boolean containedWater = block.containsLodWater();
+			if (containedWater) block = water;
+
 			// can be un-commented for testing floating islands
 			// it's recommended to place a single netherrack block as a marker 
 			// and a glowstone block to trigger an LOD update
@@ -553,39 +559,58 @@ public class FullDataToRenderDataTransformer
 
 			// Crossed plants have their own geometry and never color or occlude terrain,
 			// even with foliage disabled or when the terrain's vertical budget is reduced.
-			if (block.getLodVegetationKind() != 0)
+			if (!containedWater) plantSource = block;
+			if (plantSource.getLodVegetationKind() != 0)
 			{
-				IBlockStateWrapper plant = block;
+				IBlockStateWrapper belowPlant = null, abovePlant = null;
 				if (fullDataIndex + 1 < fullColumnData.size())
 				{
 					long below = fullColumnData.getLong(fullDataIndex + 1);
 					if (FullDataPointUtil.getBottomY(below) + FullDataPointUtil.getHeight(below) == bottomY)
 					{
-						try { plant = block.getPlantRenderState(fullDataMapping.getBlockStateWrapper(FullDataPointUtil.getId(below)), levelWrapper); }
+						try { belowPlant = fullDataMapping.getBlockStateWrapper(FullDataPointUtil.getId(below)); }
 						catch (IndexOutOfBoundsException ignored) { /* The normal mapping check logs this on the next iteration. */ }
 					}
 				}
+				if (fullDataIndex > 0)
+				{
+					long above = fullColumnData.getLong(fullDataIndex - 1);
+					if (FullDataPointUtil.getBottomY(above) == topY)
+						try { abovePlant = fullDataMapping.getBlockStateWrapper(FullDataPointUtil.getId(above)); }
+						catch (IndexOutOfBoundsException ignored) { /* Already reported by the ordinary mapping check. */ }
+				}
+				IBlockStateWrapper plant = plantSource.getPlantRenderState(belowPlant, abovePlant, levelWrapper);
 				byte kind = plant.getLodVegetationKind();
 				if (columnSource != null && fullDataSource.getDataDetailLevel() == 0
 					&& columnSource.hasTextureSetIds() && VegetationRenderData.enabled(kind)
 					&& VegetationRenderData.includesColumn(blockX, blockZ, Config.Client.Advanced.Graphics.Foliage.vegetationDensity.get()))
 				{
-					int plantColor = levelWrapper.getBlockColor(mutableBlockPos, biome, fullDataSource, plant);
-					if (ColorUtil.getAlpha(plantColor) != 0)
+					IBlockStateWrapper stem = blockHeight > 1
+						? plantSource.getPlantRenderState(plantSource, plantSource, levelWrapper) : plant;
+					boolean splitStem = !stem.equals(plant);
+					for (int part = 0; part < (splitStem ? 2 : 1); part++)
 					{
-						short texture = BlockTextureRegistry.INSTANCE.getOrRegisterBlockStateSetId(plant);
-						if (texture != 0)
+						IBlockStateWrapper segment = part == 0 ? plant : stem;
+						int plantColor = levelWrapper.getBlockColor(mutableBlockPos, biome, fullDataSource, segment);
+						short texture = BlockTextureRegistry.INSTANCE.getOrRegisterBlockStateSetId(segment);
+						if (ColorUtil.getAlpha(plantColor) != 0 && texture != 0)
 						{
 							if (columnSource.vegetation == null) columnSource.vegetation = new VegetationRenderData();
 							columnSource.vegetation.add(blockX, blockZ, RenderDataPointUtil.createDataPoint(
-								topY, bottomY, ColorUtil.setAlpha(plantColor, 255), skyLight, blockLight, plant.getMaterialId()), texture);
+								part == 0 ? topY : topY - 1, splitStem && part == 0 ? topY - 1 : bottomY,
+								ColorUtil.setAlpha(plantColor, 255), skyLight, blockLight,
+								containedWater ? EDhApiBlockMaterial.GRASS.index : segment.getMaterialId()), texture);
 						}
 					}
 				}
-				// Keep exposed terrain lit, without transferring plant color or material.
-				skylightToApplyToNextBlock = skyLight;
-				blocklightToApplyToNextBlock = blockLight;
-				continue;
+				if (!containedWater)
+				{
+					// Keep exposed terrain lit, without transferring plant color or material.
+					skylightToApplyToNextBlock = skyLight;
+					blocklightToApplyToNextBlock = blockLight;
+					continue;
+				}
+				// Submerged plants retain their full water volume even with foliage disabled.
 			}
 			
 			boolean ignoreNonSolidBlock =

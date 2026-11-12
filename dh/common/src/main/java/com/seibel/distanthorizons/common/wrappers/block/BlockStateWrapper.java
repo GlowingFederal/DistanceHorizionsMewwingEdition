@@ -186,6 +186,10 @@ public class BlockStateWrapper implements IBlockStateWrapper
 	private final boolean alwaysRasterizeTexture;
 	private final boolean isSolid;
 	private final boolean isLiquid;
+	#if MC_VER <= MC_1_7_10
+	/** Optional UAB contained-water renderers; no UAB classes are linked or loaded. */
+	private final byte aquaticKind;
+	#endif
 	private final boolean allowApiColorOverride;
 	private final boolean allowApiTextureOverride;
 	/** null if this block can't tint beacons */
@@ -393,6 +397,16 @@ public class BlockStateWrapper implements IBlockStateWrapper
 		
 		this.blockState = blockState;
 		#if MC_VER <= MC_1_7_10
+		String blockClass = blockState == null ? "" : blockState.getBlock().getClass().getName();
+		switch (blockClass)
+		{
+			case "ganymedes01.etfuturum.blocks.BlockSeagrass": this.aquaticKind = 1; break;
+			case "ganymedes01.etfuturum.blocks.BlockKelp": this.aquaticKind = 2; break;
+			case "ganymedes01.etfuturum.blocks.BlockCoral": this.aquaticKind = 3; break;
+			case "ganymedes01.etfuturum.blocks.BlockSeaPickle": this.aquaticKind = 4; break;
+			case "ganymedes01.etfuturum.blocks.BlockBubbleColumn": this.aquaticKind = 5; break;
+			default: this.aquaticKind = 0;
+		}
 		// TODO store block/meta separately
 		if (blockState != null && !isAir()) {
 			this.wrappedMcObject = new Object[] {
@@ -1409,6 +1423,8 @@ public class BlockStateWrapper implements IBlockStateWrapper
 	public byte getLodVegetationKind()
 	{
 		#if MC_VER <= MC_1_7_10
+		if (this.containsLodWater() && this.aquaticKind <= 4)
+			return (byte) (this.aquaticKind <= 2 ? 1 : 2);
 		if (this.blockState == null || this.isLiquid) return 0;
 		Block block = this.blockState.getBlock();
 		int renderType = block.getRenderType();
@@ -1423,6 +1439,30 @@ public class BlockStateWrapper implements IBlockStateWrapper
 		#else
 		return 0;
 		#endif
+	}
+
+	@Override
+	public boolean containsLodWater()
+	{
+		#if MC_VER <= MC_1_7_10
+		return this.aquaticKind != 0 && this.isLiquid;
+		#else
+		return false;
+		#endif
+	}
+
+	@Override
+	public IBlockStateWrapper getPlantRenderState(IBlockStateWrapper below, IBlockStateWrapper above, ILevelWrapper level)
+	{
+		#if MC_VER <= MC_1_7_10
+		if (this.aquaticKind == 2)
+		{
+			boolean stem = above instanceof BlockStateWrapper && ((BlockStateWrapper) above).aquaticKind == 2;
+			// UAB stores kelp as metadata zero; bit 8 is a client-only stem texture state.
+			return fromBlockState(this.blockState.getBlock(), stem ? 8 : 0, level);
+		}
+		#endif
+		return this.getPlantRenderState(below, level);
 	}
 
 	@Override

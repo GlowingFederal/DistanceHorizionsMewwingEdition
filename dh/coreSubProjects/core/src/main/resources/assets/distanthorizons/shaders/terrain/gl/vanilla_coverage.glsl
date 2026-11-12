@@ -2,10 +2,14 @@
 uniform sampler2D dhc_Sections;
 uniform vec3 dhc_Offset;
 uniform bool dhc_Enabled = false;
+// Native composition owns the full mask. Shader packs need LOD background in
+// their distance-faded normal terrain, outside Iris's normal near handoff.
+uniform float dhc_MaxDistance = 0.0;
 
 void dhc_clip(vec3 cameraRelativePosition)
 {
     if (!dhc_Enabled) return;
+    if (dhc_MaxDistance > 0.0 && length(cameraRelativePosition) >= dhc_MaxDistance) return;
     // Sample just inside the LOD surface, so a face on an exact chunk border belongs
     // to its source voxel, not the neighbor on the other side of that face.
     vec3 inward = normalize(cross(dFdx(cameraRelativePosition), dFdy(cameraRelativePosition)));

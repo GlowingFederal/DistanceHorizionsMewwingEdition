@@ -57,8 +57,9 @@ public class VanillaSectionCoverageTest
 		coverage.set(mesh, -1, 16, -2, true);
 		coverage.set(mesh, -1, -1, -2, true);
 		coverage.beginVisibility();
-		coverage.markVisible(-2, -3);
-		coverage.markVisible(-1, -2);
+		coverage.markVisible(-2, 0, -3);
+		coverage.markVisible(-2, 15, -3);
+		coverage.markVisible(-1, 8, -2);
 		coverage.endVisibility();
 		ByteBuffer bytes = ByteBuffer.allocate(16);
 		coverage.writeWindow(bytes, -2, -3, 2);
@@ -79,14 +80,14 @@ public class VanillaSectionCoverageTest
 		coverage.set(mesh, 1, 4, 0, true);
 		ByteBuffer bytes = ByteBuffer.allocate(16);
 		coverage.beginVisibility();
-		coverage.markVisible(0, 0);
+		coverage.markVisible(0, 4, 0);
 		coverage.endVisibility();
 		coverage.writeWindow(bytes, 0, 0, 2);
 		assertEquals(16, bytes.get(0));
 		assertEquals(0, bytes.get(4));
 		long revision = coverage.getRevision();
 		coverage.beginVisibility();
-		coverage.markVisible(0, 0);
+		coverage.markVisible(0, 4, 0);
 		coverage.endVisibility();
 		assertEquals(revision, coverage.getRevision());
 		// Model a render-distance reduction without evicting a cached uploaded mesh.
@@ -95,5 +96,44 @@ public class VanillaSectionCoverageTest
 		coverage.writeWindow(bytes, 0, 0, 2);
 		assertEquals(0, bytes.get(0));
 		assertEquals(16, coverage.getMask(0, 0));
+	}
+
+	@Test public void visibleRoofCannotSuppressUndrawnTerrainOrWaterInTheSameColumn()
+	{
+		VanillaSectionCoverage coverage = new VanillaSectionCoverage();
+		Object mesh = new Object();
+		coverage.set(mesh, 0, 2, 0, true);
+		coverage.set(mesh, 0, 3, 0, true);
+		coverage.set(mesh, 0, 8, 0, true);
+		ByteBuffer bytes = ByteBuffer.allocate(4);
+		coverage.beginVisibility();
+		coverage.markVisible(0, 8, 0);
+		coverage.endVisibility();
+		coverage.writeWindow(bytes, 0, 0, 1);
+		assertEquals(0, bytes.get(0));
+		assertEquals(1, bytes.get(1));
+		// Camera rotation can change vertical membership without changing any column.
+		long revision = coverage.getRevision();
+		coverage.beginVisibility();
+		coverage.markVisible(0, 3, 0);
+		coverage.endVisibility();
+		assertTrue(coverage.getRevision() > revision);
+		coverage.writeWindow(bytes, 0, 0, 1);
+		assertEquals(8, bytes.get(0));
+		assertEquals(0, bytes.get(1));
+	}
+
+	@Test public void visibleButUnfinishedSectionCannotClaimReadyNeighborGeometry()
+	{
+		VanillaSectionCoverage coverage = new VanillaSectionCoverage();
+		coverage.set(new Object(), -1, 3, -1, true);
+		coverage.beginVisibility();
+		coverage.markVisible(-1, 4, -1);
+		coverage.markVisible(-1, -1, -1);
+		coverage.markVisible(-1, 16, -1);
+		coverage.endVisibility();
+		ByteBuffer bytes = ByteBuffer.allocate(4);
+		coverage.writeWindow(bytes, -1, -1, 1);
+		assertEquals(0, bytes.getInt(0));
 	}
 }

@@ -222,6 +222,11 @@ public class TextureAtlasSpriteWrapper
 	@Nullable
 	public static TextureAtlasSprite resolveFaceSprite(IBlockState blockstate, int sideOrdinal)
 	{
+		if (blockstate.getBlock().getClass().getName().equals("ganymedes01.etfuturum.blocks.BlockKelp"))
+		{
+			TextureAtlasSprite kelp = findBlockAtlasSprite((blockstate.getMeta() & 8) != 0 ? "kelp_plant" : "kelp");
+			if (kelp != null) return kelp;
+		}
 		// The transformer supplies the lower half's type in transient top states.
 		if (blockstate.getBlock().getClass() == net.minecraft.block.BlockDoublePlant.class && (blockstate.getMeta() & 8) != 0)
 		{

@@ -73,7 +73,7 @@ public class AngelicaAccessor implements IAngelicaAccessor
 				{
 					RenderSection section = list.getRegion().getSection(sections.nextByteAsInt());
 					if (section != null && section.isBuilt() && !section.isDisposed())
-						coverage.markVisible(section.getChunkX(), section.getChunkZ());
+						coverage.markVisible(section.getChunkX(), section.getChunkY(), section.getChunkZ());
 				}
 			}
 		}

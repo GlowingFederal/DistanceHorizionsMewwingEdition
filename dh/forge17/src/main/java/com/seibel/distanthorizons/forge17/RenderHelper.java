@@ -22,13 +22,17 @@ import static com.seibel.distanthorizons.lwjgl.LWJGLServiceProvider.LWJGL;
 
 public class RenderHelper 
 {
-	private static final IAngelicaAccessor ANGELICA_ACCESSOR = ModAccessorInjector.INSTANCE.get(IAngelicaAccessor.class);
+	// Matrix capture can load RenderHelper before Forge registers optional accessors.
+	private static final class DelayedAccessors
+	{
+		private static final IAngelicaAccessor ANGELICA = ModAccessorInjector.INSTANCE.get(IAngelicaAccessor.class);
+	}
 	
 	private static DhMat4f modelViewMatrix;
 	private static DhMat4f projectionMatrix;
-	public static boolean usesAngelica() { return ANGELICA_ACCESSOR != null; }
+	public static boolean usesAngelica() { return DelayedAccessors.ANGELICA != null; }
 	public static void updateVanillaSectionVisibility()
-	{ if (ANGELICA_ACCESSOR != null) ANGELICA_ACCESSOR.updateVanillaSectionVisibility(); }
+	{ if (DelayedAccessors.ANGELICA != null) DelayedAccessors.ANGELICA.updateVanillaSectionVisibility(); }
 	
 	
 	
@@ -75,7 +79,7 @@ public class RenderHelper
 		
 		// set GL state for DH rendering
 	    // TODO could we use DH's GLState object? or would that be overkill?
-	    if (ANGELICA_ACCESSOR == null) 
+	    if (DelayedAccessors.ANGELICA == null)
 		{
 			LWJGL.glDisable(GL32.GL_ALPHA_TEST);
         }
@@ -91,7 +95,7 @@ public class RenderHelper
 		
 		// restore the GL State
 	    LWJGL.glDepthFunc(GL32.GL_LEQUAL);
-        if (ANGELICA_ACCESSOR == null) 
+        if (DelayedAccessors.ANGELICA == null)
 		{
 			LWJGL.glEnable(GL32.GL_ALPHA_TEST);
         }
@@ -106,8 +110,8 @@ public class RenderHelper
 	
     public static void renderFade(boolean translucent) 
     {
-        if (ANGELICA_ACCESSOR != null
-            && !ANGELICA_ACCESSOR.canDoFadeShader()) 
+        if (DelayedAccessors.ANGELICA != null
+            && !DelayedAccessors.ANGELICA.canDoFadeShader())
 		{
 			return;
         }
@@ -115,7 +119,7 @@ public class RenderHelper
         ClientApi.RENDER_STATE.mcProjectionMatrix = getProjectionMatrix();
         ClientApi.RENDER_STATE.clientLevelWrapper = ClientLevelWrapper.getWrapper(Minecraft.getMinecraft().theWorld);
 	    
-	    if (ANGELICA_ACCESSOR == null)
+	    if (DelayedAccessors.ANGELICA == null)
 	    {
 		    LWJGL.glDisable(GL32.GL_ALPHA_TEST);
 	    }
@@ -128,7 +132,7 @@ public class RenderHelper
 	    {
 		    ClientApi.INSTANCE.renderFadeOpaque();
 	    }
-	    if (ANGELICA_ACCESSOR == null)
+	    if (DelayedAccessors.ANGELICA == null)
 	    {
 		    LWJGL.glEnable(GL32.GL_ALPHA_TEST);
 	    }
@@ -139,7 +143,7 @@ public class RenderHelper
 	
     public static void renderDeferredLods() 
     {
-        if (ANGELICA_ACCESSOR == null) 
+        if (DelayedAccessors.ANGELICA == null)
 		{
             return;
         }

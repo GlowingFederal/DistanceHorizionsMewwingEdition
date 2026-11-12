@@ -38,7 +38,7 @@ public class MixinRenderGlobal
 				if (this.sortedWorldRenderers != null)
 					for (WorldRenderer renderer : this.sortedWorldRenderers)
 						if (renderer != null && renderer.isInFrustum && (!this.occlusionEnabled || renderer.isVisible))
-							coverage.markVisible(renderer.posX >> 4, renderer.posZ >> 4);
+							coverage.markVisible(renderer.posX >> 4, renderer.posY >> 4, renderer.posZ >> 4);
 				coverage.endVisibility();
 			}
 			RenderHelper.renderLods();

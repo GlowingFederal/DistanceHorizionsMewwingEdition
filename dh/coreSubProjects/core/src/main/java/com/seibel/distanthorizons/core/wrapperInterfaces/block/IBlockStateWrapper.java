@@ -51,9 +51,17 @@ public interface IBlockStateWrapper extends IDhApiBlockStateWrapper
 	/** 0: ordinary block, 1: crossed grass/fern, 2: crossed flower/other plant. */
 	default byte getLodVegetationKind() { return 0; }
 
+	/** A plant or other non-fluid block containing source water in the saved state. */
+	default boolean containsLodWater() { return false; }
+
 	/** Resolve world-dependent plant halves for rendering without changing saved block states. */
 	default IBlockStateWrapper getPlantRenderState(IBlockStateWrapper below,
 		com.seibel.distanthorizons.core.wrapperInterfaces.world.ILevelWrapper level) { return this; }
+
+	/** Neighbor states come from the captured column, never from a live world query. */
+	default IBlockStateWrapper getPlantRenderState(IBlockStateWrapper below, IBlockStateWrapper above,
+		com.seibel.distanthorizons.core.wrapperInterfaces.world.ILevelWrapper level)
+	{ return this.getPlantRenderState(below, level); }
 	
 	boolean isBeaconBlock();
 	/** IE a glass block that can affect the beacon beam color */

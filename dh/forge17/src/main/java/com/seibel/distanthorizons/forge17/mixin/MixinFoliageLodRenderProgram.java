@@ -21,6 +21,7 @@ public abstract class MixinFoliageLodRenderProgram
 	@Unique private boolean dh$sampler;
 	@Unique private boolean dh$coverageSampler, dh$shadow;
 	@Unique private int dh$coverageOffset = -1, dh$coverageEnabled = -1;
+	@Unique private int dh$coverageDistance = -1;
 	@Unique private int dh$distance = -1;
 	@Unique private int dh$enabled = -1;
     @Unique private int dh$presentationMin = -1, dh$presentationMax = -1, dh$clip = -1;
@@ -40,6 +41,7 @@ public abstract class MixinFoliageLodRenderProgram
 		this.dh$shadow = isShadowPass;
 		this.dh$coverageOffset = GL20.glGetUniformLocation(this.id, "dhc_Offset");
 		this.dh$coverageEnabled = GL20.glGetUniformLocation(this.id, "dhc_Enabled");
+		this.dh$coverageDistance = GL20.glGetUniformLocation(this.id, "dhc_MaxDistance");
 		this.dh$presentationMin = GL20.glGetUniformLocation(this.id, "dhp_Min");
         this.dh$presentationMax = GL20.glGetUniformLocation(this.id, "dhp_Max");
         this.dh$clip = GL20.glGetUniformLocation(this.id, "clipDistance");
@@ -62,6 +64,9 @@ public abstract class MixinFoliageLodRenderProgram
 		boolean coverageAvailable = this.dh$coverageSampler && this.dh$coverageEnabled >= 0;
 		GL20.glUniform1i(this.dh$coverageEnabled, coverageAvailable && !this.dh$shadow && !Config.Client.Advanced.Debugging.lodOnlyMode.get() ? 1 : 0);
 		GL20.glUniform3f(this.dh$coverageOffset, coverage.offsetX, coverage.offsetY, coverage.offsetZ);
+		// A submitted normal mesh can still be discarded/faded by the shader pack.
+		// Keep its LOD background outside the same near handoff Iris normally clips.
+		GL20.glUniform1f(this.dh$coverageDistance, com.seibel.distanthorizons.core.util.RenderUtil.getNearClipPlaneInBlocks());
 		// Programs without the ownership varying retain Iris's normal near clipping.
 		if (coverageAvailable) GL20.glUniform1f(this.dh$clip, 0.0f);
         GL20.glUniform1f(this.dh$distance, Config.Client.Advanced.Graphics.Foliage.vegetationRenderDistance.get() * 16.0f);

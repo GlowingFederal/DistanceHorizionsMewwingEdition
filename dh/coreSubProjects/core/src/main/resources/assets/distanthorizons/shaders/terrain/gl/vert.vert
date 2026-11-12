@@ -19,6 +19,7 @@ uniform bool uIsWhiteWorld;
 uniform mat4 uCombinedMatrix;
 uniform vec3 uModelOffset;
 uniform float uWorldYOffset;
+uniform float uWaterHeightOffset = 0.0;
 
 uniform sampler2D uLightMap;
 uniform float uMircoOffset;
@@ -68,6 +69,13 @@ void main()
     vertexWorldPos = vPosition.xyz + uModelOffset;
     
     vertexYPos = vPosition.y + uWorldYOffset;
+    // Legacy source water ends at 8/9 of its block. Match that surface at
+    // ownership borders instead of exposing a narrow gap above normal water.
+    if (irisData.x == 12u)
+    {
+        vertexWorldPos.y -= uWaterHeightOffset;
+        vertexYPos -= uWaterHeightOffset;
+    }
     
     uint meta = vPosition.a;
     

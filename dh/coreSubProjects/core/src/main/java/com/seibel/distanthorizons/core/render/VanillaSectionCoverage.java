@@ -3,7 +3,6 @@ package com.seibel.distanthorizons.core.render;
 
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.nio.ByteBuffer;
 
 /**
@@ -17,8 +16,8 @@ public final class VanillaSectionCoverage
 	private final Long2ObjectOpenHashMap<Object> owners = new Long2ObjectOpenHashMap<>();
 	private final Long2IntOpenHashMap columns = new Long2IntOpenHashMap();
 	private long revision;
-	private LongOpenHashSet visibleColumns = new LongOpenHashSet();
-	private LongOpenHashSet nextVisibleColumns = new LongOpenHashSet();
+	private Long2IntOpenHashMap visibleSections = new Long2IntOpenHashMap();
+	private Long2IntOpenHashMap nextVisibleSections = new Long2IntOpenHashMap();
 
 	private static long columnKey(int x, int z) { return ((long)x << 32) | (z & 0xffffffffL); }
 	private static long sectionKey(int x, int y, int z)
@@ -50,23 +49,28 @@ public final class VanillaSectionCoverage
 	public int getMask(int x, int z) { return this.columns.get(columnKey(x, z)); }
 	public long getRevision() { return this.revision; }
 
-	/** Only columns in the current normal renderer's draw list may suppress a LOD. */
-	public void beginVisibility() { this.nextVisibleColumns.clear(); }
-	public void markVisible(int x, int z) { this.nextVisibleColumns.add(columnKey(x, z)); }
+	/** Readiness and draw-list membership must refer to the same vertical section. */
+	public void beginVisibility() { this.nextVisibleSections.clear(); }
+	public void markVisible(int x, int y, int z)
+	{
+		if (y < 0 || y >= 16) return;
+		long column = columnKey(x, z);
+		this.nextVisibleSections.put(column, this.nextVisibleSections.get(column) | (1 << y));
+	}
 	public void endVisibility()
 	{
-		if (this.visibleColumns.equals(this.nextVisibleColumns)) return;
-		LongOpenHashSet old = this.visibleColumns;
-		this.visibleColumns = this.nextVisibleColumns;
-		this.nextVisibleColumns = old;
+		if (this.visibleSections.equals(this.nextVisibleSections)) return;
+		Long2IntOpenHashMap old = this.visibleSections;
+		this.visibleSections = this.nextVisibleSections;
+		this.nextVisibleSections = old;
 		this.revision++;
 	}
 	public void clear()
 	{
 		this.owners.clear();
 		this.columns.clear();
-		this.visibleColumns.clear();
-		this.nextVisibleColumns.clear();
+		this.visibleSections.clear();
+		this.nextVisibleSections.clear();
 		this.revision++;
 	}
 
@@ -78,7 +82,7 @@ public final class VanillaSectionCoverage
 		for (int x = 0; x < width; x++)
 		{
 			long column = columnKey(minX + x, minZ + z);
-			int mask = this.visibleColumns.contains(column) ? this.columns.get(column) : 0;
+			int mask = this.visibleSections.get(column) & this.columns.get(column);
 			target.put((byte)mask).put((byte)(mask >>> 8)).put((byte)0).put((byte)0);
 		}
 		target.flip();

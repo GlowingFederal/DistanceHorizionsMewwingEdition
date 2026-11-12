@@ -36,13 +36,19 @@ public class VegetationColumnTest
 	private static final IBlockStateWrapper LEAVES = block("leaves", true, false, 16, EDhApiBlockMaterial.LEAVES.index);
 	private static final IBlockStateWrapper SAME_COLOR_TERRAIN = block("same_color_terrain", true, false, 16, EDhApiBlockMaterial.STONE.index);
 	private static final IBlockStateWrapper LEAF_COLOR_TERRAIN = block("leaf_color_terrain", true, false, 16, EDhApiBlockMaterial.STONE.index);
+	private static final IBlockStateWrapper WATER = new TestBlockStateWrapper("minecraft:water") {
+		@Override public boolean isLiquid() { return true; }
+		@Override public boolean isSolid() { return false; }
+		@Override public byte getMaterialId() { return EDhApiBlockMaterial.WATER.index; }
+	};
+	private static final int WATER_COLOR = 0x7f4060c0;
 	private static final int STONE_COLOR = 0xff808080, FLOWER_COLOR = 0xffff2020, LEAF_COLOR = 0xff408020;
 	private static final IClientLevelWrapper LEVEL = (IClientLevelWrapper) Proxy.newProxyInstance(
 		IClientLevelWrapper.class.getClassLoader(), new Class<?>[]{IClientLevelWrapper.class}, (proxy, method, args) -> {
 			if (method.getName().equals("getMinHeight")) return 0;
 			if (method.getName().equals("getBlockColor")) {
 				Object block = args[3];
-				return block == FLOWER || block == SAME_COLOR_TERRAIN ? FLOWER_COLOR : block == LEAVES || block == LEAF_COLOR_TERRAIN ? LEAF_COLOR : block == AIR ? 0 : STONE_COLOR;
+				return block == WATER ? WATER_COLOR : block == FLOWER || block == SAME_COLOR_TERRAIN ? FLOWER_COLOR : block == LEAVES || block == LEAF_COLOR_TERRAIN ? LEAF_COLOR : block == AIR ? 0 : STONE_COLOR;
 			}
 			throw new AssertionError("Unexpected level access: " + method);
 		});
@@ -60,7 +66,8 @@ public class VegetationColumnTest
 				if (name.equals("getRendererIgnoredBlocks") || name.equals("getRendererIgnoredCaveBlocks"))
 					return new ObjectOpenHashSet<>(new IBlockStateWrapper[]{AIR});
 				if (name.startsWith("getWater") && name.endsWith("Blocks")) return new ObjectOpenHashSet<IBlockStateWrapper>();
-				if (name.equals("getWaterBlockStateWrapper") || name.startsWith("deserializeBlockState")) return AIR;
+				if (name.equals("getWaterBlockStateWrapper")) return WATER;
+				if (name.startsWith("deserializeBlockState")) return AIR;
 				throw new AssertionError("Unexpected factory access: " + method);
 			});
 		SingletonInjector.INSTANCE.replaceBinding(IWrapperFactory.class, factory);
@@ -177,6 +184,37 @@ public class VegetationColumnTest
 			Config.Client.Advanced.Graphics.Foliage.lodGrass.setWithoutFiringEvents(oldGrass);
 			Config.Client.Advanced.Graphics.Foliage.lodFlowers.setWithoutFiringEvents(oldFlowers);
 		}
+	}
+
+	@Test public void submergedPlantsKeepWaterAtEveryDetailAndFoliageSetting() throws Exception
+	{
+		IBlockStateWrapper plant = new TestBlockStateWrapper("mod:submerged_plant") {
+			@Override public byte getLodVegetationKind() { return 1; }
+			@Override public boolean containsLodWater() { return true; }
+			@Override public boolean isLiquid() { return true; }
+		};
+		boolean oldGrass = Config.Client.Advanced.Graphics.Foliage.lodGrass.get();
+		try {
+			for (boolean enabled : new boolean[]{false, true}) {
+				Config.Client.Advanced.Graphics.Foliage.lodGrass.setWithoutFiringEvents(enabled);
+				for (byte detail : new byte[]{0, 2}) {
+					long[] result = transform(detail, false, WATER, plant, plant, TERRAIN);
+					assertPoint(result[0], 64, 67, WATER_COLOR, EDhApiBlockMaterial.WATER.index);
+					assertPoint(result[1], 0, 64, STONE_COLOR, TERRAIN.getMaterialId());
+					assertEquals(0, result[2]);
+				}
+			}
+		} finally { Config.Client.Advanced.Graphics.Foliage.lodGrass.setWithoutFiringEvents(oldGrass); }
+	}
+
+	@Test public void containedWaterWithoutPlantGeometryStillUsesWaterColorAndMaterial() throws Exception
+	{
+		IBlockStateWrapper bubble = new TestBlockStateWrapper("mod:bubble_column") {
+			@Override public boolean containsLodWater() { return true; }
+		};
+		long[] result = transform((byte)0, true, bubble, TERRAIN);
+		assertPoint(result[0], 64, 65, WATER_COLOR, EDhApiBlockMaterial.WATER.index);
+		assertPoint(result[1], 0, 64, STONE_COLOR, TERRAIN.getMaterialId());
 	}
 
 	private static long[] transform(byte detail, boolean preserveTint, IBlockStateWrapper... blocks) throws Exception
