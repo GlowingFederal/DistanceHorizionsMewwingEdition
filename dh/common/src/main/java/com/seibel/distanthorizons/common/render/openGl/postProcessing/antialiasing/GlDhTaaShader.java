@@ -49,6 +49,7 @@ public class GlDhTaaShader extends GlAbstractShaderRenderer
 	// Previous-frame state, captured at the END of render() for use NEXT frame.
 	private final DhMat4f previousDhProjMvmMatrix = new DhMat4f();
 	private final DhVec3d previousCameraPos = new DhVec3d(0,0,0);
+	private boolean historyValid;
 	
 	
 	
@@ -74,6 +75,8 @@ public class GlDhTaaShader extends GlAbstractShaderRenderer
 	public int uCurrentDepthSampler;
 	
 	public int uHistoryColorSampler;
+	private int uStationaryHistoryWeight;
+	private int uHistoryReady;
 	
 	//endregion
 	
@@ -115,6 +118,8 @@ public class GlDhTaaShader extends GlAbstractShaderRenderer
 		this.uCurrentDepthSampler = this.shader.getUniformLocation("uCurrentDepthSampler");
 		
 		this.uHistoryColorSampler = this.shader.getUniformLocation("uHistoryColorSampler");
+		this.uStationaryHistoryWeight = this.shader.getUniformLocation("uStationaryHistoryWeight");
+		this.uHistoryReady = this.shader.getUniformLocation("uHistoryReady");
 		
 	}
 	
@@ -159,6 +164,10 @@ public class GlDhTaaShader extends GlAbstractShaderRenderer
 			this.shader.setUniform(this.uViewHeight, (float) height);
 			
 			this.shader.setUniform(this.uDepthIsZeroToPositiveOne, (renderParams.renderDefinition.getDepthRange() == EDhApiDepthRange.ZERO_TO_POS_ONE) ? 1 : 0);
+			#if MC_VER <= MC_1_7_10
+			this.shader.setUniform(this.uStationaryHistoryWeight, 0.98f);
+			this.shader.setUniform(this.uHistoryReady, this.historyValid);
+			#endif
 		}
 	}
 	
@@ -170,7 +179,10 @@ public class GlDhTaaShader extends GlAbstractShaderRenderer
 		this.previousDhProjMvmMatrix.multiply(renderParams.dhModelViewMatrix);
 		
 		this.previousCameraPos.set(renderParams.exactCameraPosition);
+		this.historyValid = true;
 	}
+
+	public void resetHistory() { this.historyValid = false; }
 	
 	//endregion
 	

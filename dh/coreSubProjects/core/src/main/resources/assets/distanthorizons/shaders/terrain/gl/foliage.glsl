@@ -16,7 +16,7 @@ vec2 dhf_faceUv(vec3 pos, uint normal)
     return vec2(1.0 - pos.z, 1.0 - pos.y);
 }
 
-vec4 dhf_sample(vec3 pos, uint normal, uint tileId, float viewDistance)
+vec4 dhf_sample(vec3 pos, uint normal, uint tileId, float viewDistance, vec2 dx, vec2 dy)
 {
     bool plant = normal >= 6u && normal < 8u;
     if (plant && (!dhf_Enabled || viewDistance >= dhf_Distance)) discard;
@@ -24,9 +24,6 @@ vec4 dhf_sample(vec3 pos, uint normal, uint tileId, float viewDistance)
     vec2 atlasSize = vec2(textureSize(dhf_BlockAtlas, 0));
     vec2 origin = vec2(float(tileId % 256u), float(tileId / 256u)) * 16.0;
     vec2 wrapped = dhf_faceUv(fract(pos), normal) * 16.0;
-    vec2 unwrapped = dhf_faceUv(pos, normal) * 16.0;
-    // Derivatives of fract() jump at block edges and choose the wrong mipmap.
-    vec2 dx = dFdx(unwrapped), dy = dFdy(unwrapped);
     vec4 tile = textureGrad(dhf_BlockAtlas, (origin + wrapped) / atlasSize, dx / atlasSize, dy / atlasSize);
     if (plant && tile.a < 0.5) discard;
     if (normal >= 8u && max(length(dx), length(dy)) < 8.0)
@@ -42,4 +39,12 @@ vec4 dhf_sample(vec3 pos, uint normal, uint tileId, float viewDistance)
         if (gaps > 0.999) discard;
     }
     return tile;
+}
+
+vec4 dhf_sample(vec3 pos, uint normal, uint tileId, float viewDistance)
+{
+    // Preserve the shader-pack entry point. Native rendering supplies gradients
+    // evaluated before section/presentation discards through the overload above.
+    vec2 unwrapped = dhf_faceUv(pos, normal) * 16.0;
+    return dhf_sample(pos, normal, tileId, viewDistance, dFdx(unwrapped), dFdy(unwrapped));
 }

@@ -5,6 +5,8 @@ import com.seibel.distanthorizons.api.enums.rendering.EDhApiBlockMaterial;
 import com.seibel.distanthorizons.core.config.Config;
 import com.seibel.distanthorizons.core.dataObjects.fullData.sources.FullDataSourceV2;
 import com.seibel.distanthorizons.core.dataObjects.render.columnViews.ColumnRenderView;
+import com.seibel.distanthorizons.core.dataObjects.render.ColumnRenderSource;
+import com.seibel.distanthorizons.core.dataObjects.render.textures.BlockTextureRegistry;
 import com.seibel.distanthorizons.core.dataObjects.transformers.FullDataToRenderDataTransformer;
 import com.seibel.distanthorizons.core.dependencyInjection.SingletonInjector;
 import com.seibel.distanthorizons.core.pos.DhSectionPos;
@@ -22,7 +24,9 @@ import testItems.wrappers.TestBiomeWrapper;
 import testItems.wrappers.TestBlockStateWrapper;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
+import java.util.Map;
 
 import static org.junit.Assert.*;
 
@@ -215,6 +219,45 @@ public class VegetationColumnTest
 		long[] result = transform((byte)0, true, bubble, TERRAIN);
 		assertPoint(result[0], 64, 65, WATER_COLOR, EDhApiBlockMaterial.WATER.index);
 		assertPoint(result[1], 0, 64, STONE_COLOR, TERRAIN.getMaterialId());
+	}
+
+	@Test public void surfacePlantsUseWaterTextureForTheirWaterTerrain() throws Exception
+	{
+		IBlockStateWrapper plant = new TestBlockStateWrapper("texture_test:surface_kelp") {
+			@Override public boolean containsLodWater() { return true; }
+		};
+		Field field = BlockTextureRegistry.class.getDeclaredField("setIdByBlockStateWrapper");
+		field.setAccessible(true);
+		@SuppressWarnings("unchecked") Map<IBlockStateWrapper, Short> sets =
+			(Map<IBlockStateWrapper, Short>) field.get(BlockTextureRegistry.INSTANCE);
+		Short previousWater = sets.put(WATER, (short)101), previousPlant = sets.put(plant, (short)102);
+		boolean oldTextures = Config.Client.Advanced.Graphics.Texture.enableTexturedLods.get();
+		try {
+			Config.Client.Advanced.Graphics.Texture.enableTexturedLods.setWithoutFiringEvents(true);
+			for (byte detail : new byte[]{0, 2}) {
+				long pos = DhSectionPos.encode((byte)(6 + detail), 0, 0);
+				try (FullDataSourceV2 source = FullDataSourceV2.createEmpty(pos);
+					ColumnRenderSource render = ColumnRenderSource.createEmpty(pos, 1, 0);
+					ColumnRenderView view = ColumnRenderView.getPooled()) {
+					int id = source.mapping.addIfNotPresentAndGetId(BIOME, plant);
+					LongArrayList full = new LongArrayList(new long[]{FullDataPointUtil.encode(id, 1, 64, (byte)0, (byte)15)});
+					render.populateColumnView(view, 0, 0);
+					Method method = FullDataToRenderDataTransformer.class.getDeclaredMethod("applyTextureSetIds",
+						IClientLevelWrapper.class, FullDataSourceV2.class, ColumnRenderView.class, LongArrayList.class,
+						ColumnRenderSource.class, int.class, int.class);
+					method.setAccessible(true);
+					for (byte material : new byte[]{EDhApiBlockMaterial.WATER.index, EDhApiBlockMaterial.GRASS.index}) {
+						view.set(0, RenderDataPointUtil.createDataPoint(65, 64, WATER_COLOR, 15, 0, material));
+						method.invoke(null, LEVEL, source, view, full, render, 0, 0);
+						assertEquals(material == EDhApiBlockMaterial.WATER.index ? 101 : 102, render.getTextureSetId(0, 0, 0));
+					}
+				}
+			}
+		} finally {
+			Config.Client.Advanced.Graphics.Texture.enableTexturedLods.setWithoutFiringEvents(oldTextures);
+			if (previousWater == null) sets.remove(WATER); else sets.put(WATER, previousWater);
+			if (previousPlant == null) sets.remove(plant); else sets.put(plant, previousPlant);
+		}
 	}
 
 	private static long[] transform(byte detail, boolean preserveTint, IBlockStateWrapper... blocks) throws Exception

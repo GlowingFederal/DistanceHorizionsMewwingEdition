@@ -69,3 +69,17 @@
 - Bound shader-pack ownership clipping to Iris's near handoff distance. Shader packs such as Complementary can discard or fade submitted normal geometry farther out; retaining LOD background through that region prevents polygonal grass cutouts and incomplete water transitions. Native depth-aware composition retains its full section mask.
 - Align native 1.7.10 LOD water with Minecraft's 8/9-block source-water surface, closing the thin height gap exposed at section-ownership borders. Shader packs retain their own water positioning.
 - Retain coarse fallback coverage, upload invalidation, buffer leases, configurable screen-door transitions, camera normalization, depth attachment ownership, native Java 8/LWJGL 2 support, and existing database/configuration formats.
+
+2026-11-16 03:37 — Repair water texture sampling and native LOD boundaries
+
+- Evaluate legacy section ownership on the native camera ray instead of the jittered LOD ray. Preserve temporal anti-aliasing, completed-section clipping, coarse fallback coverage and shader-pack projection handling while preventing subpixel water cuts at the native-to-LOD border, including narrow-FOV views.
+- Calculate texture gradients before ownership and presentation discards, then retain early clipping before texture fetches. Surviving water fragments no longer select invalid atlas mip samples at a partially clipped pixel quad, which exposed the seabed as a dark horizontal cut. Preserve the shader-pack foliage sampling entry point.
+- Use water texture alpha as optical opacity and apply its RGB modulation independently. Textured native water no longer inherits the reduced precision of compressed column alpha or treats opacity as a texture-strength mask. Preserve opaque water over missing background data, other materials, shader-pack water calculations, existing water-height alignment and saved data formats.
+
+2026-11-16 09:00 — Close unloaded-chunk water gaps and restore submerged surface textures
+
+- Exclude unknown neighbor chunks from the normal water renderer's corner-height average. Missing chunks previously acted like shoreline air and lowered the outer native water edge below the flat LOD surface. Preserve actual shoreline air, flowing-water weighting and fully known corners. Capture availability with vanilla chunk caches and Angelica's cloned sections, and pass it through UAB's contained-water view, so meshing workers do not query the live world.
+- Include Minecraft's additional 0.001-block surface inset in native LOD water positioning. Retain completed-section ownership and the existing shader-pack water path.
+- Assign canonical water textures to the water retained inside UAB kelp, seagrass, coral, sea pickles and bubble columns. Keep plant cutout textures on their separate vegetation geometry; cutout alpha no longer punches holes in the water at surface-reaching plants.
+- Calculate ownership normals from the original interpolated position instead of taking undefined nested derivatives of jitter-corrected positions. Calculate untextured noise normals before clipping as well, preserving the existing appearance while removing undefined calculations at clipped structure edges.
+- Stabilize stationary 1.7.10 temporal anti-aliasing on distant thin edges by retaining more history, while preserving the motion-based reduction in history weight. Reject newly allocated or reset history buffers for their first frame. Keep anti-aliasing enabled, preserve other targets' existing accumulation weight, and leave shader packs' own anti-aliasing unchanged.

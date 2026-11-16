@@ -77,6 +77,7 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
 	public int uModelOffset = -1;
 	public int uWorldYOffset = -1;
 	private int uWaterHeightOffset = -1;
+	private int uLegacyWaterAppearance = -1;
 	
 	public int uMircoOffset = -1;
 	public int uEarthRadius = -1;
@@ -137,6 +138,7 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
 		this.uModelOffset = this.getUniformLocation("uModelOffset");
 		this.uWorldYOffset = this.getUniformLocation("uWorldYOffset");
 		this.uWaterHeightOffset = this.getUniformLocation("uWaterHeightOffset");
+		this.uLegacyWaterAppearance = this.getUniformLocation("uLegacyWaterAppearance");
 		this.uDitherDhRendering = this.getUniformLocation("uDitherDhRendering");
 		this.uMircoOffset = this.getUniformLocation("uMircoOffset");
 		this.uEarthRadius = this.getUniformLocation("uEarthRadius");
@@ -252,7 +254,8 @@ public class GlDhTerrainShaderProgram extends GlShaderProgram implements IDhApiS
         this.setUniform(this.coverageSampler, GlVanillaSectionCoverage.TEXTURE_UNIT);
         this.setUniform(this.coverageOffset, new DhVec3f(coverage.offsetX, coverage.offsetY, coverage.offsetZ));
         this.setUniform(this.coverageEnabled, !Config.Client.Advanced.Debugging.lodOnlyMode.get());
-        this.setUniform(this.uWaterHeightOffset, 1.0f / 9.0f);
+        this.setUniform(this.uWaterHeightOffset, 1.0f / 9.0f + 0.001f);
+        this.setUniform(this.uLegacyWaterAppearance, true);
         #endif
 		
 		// uniforms

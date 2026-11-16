@@ -24,6 +24,8 @@ uniform float uViewWidth;
 uniform float uViewHeight;
 
 uniform bool uDepthIsZeroToPositiveOne;
+uniform float uStationaryHistoryWeight = 0.9;
+uniform bool uHistoryReady = true;
 
 
 
@@ -90,6 +92,8 @@ vec3 neighborClamp(vec3 currentColor, vec3 historySample, vec2 texelSize)
 /** aka "TAA" */
 vec4 TemporalAntiAlias(inout vec3 color, float prevAlpha)
 {
+    // Fresh history textures contain no previous frame to accumulate.
+    if (!uHistoryReady) return vec4(color, prevAlpha);
     float dhDepth = textureLod(uCurrentDepthSampler, texCoord, 0.0f).r;
     vec2 prvCoord = reprojectDh(dhDepth);
 
@@ -108,7 +112,9 @@ vec4 TemporalAntiAlias(inout vec3 color, float prevAlpha)
 		// apply TAA if this texel is inside the area
 		// tracked by the historical frame
         vec2 velocity = (texCoord - prvCoord) * vec2(uViewWidth, uViewHeight);
-        blendFactor = exp(-length(velocity)) * 0.6f + 0.3f;
+        // Stronger stationary accumulation suppresses the jitter cycle on thin
+        // distant edges. Camera motion still reduces history's contribution.
+        blendFactor = exp(-length(velocity)) * (uStationaryHistoryWeight - 0.3f) + 0.3f;
     }
 
     vec2 viewInverse = vec2(1.0f / uViewWidth, 1.0f / uViewHeight);

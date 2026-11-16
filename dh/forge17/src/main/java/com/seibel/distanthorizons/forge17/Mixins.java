@@ -24,6 +24,9 @@ public enum Mixins implements IMixins
     CLIENT_CORE(
 		new MixinBuilder().setPhase(Phase.EARLY)
         .addClientMixins(
+            "MixinChunkCacheAvailability",
+            "MixinContainedWaterAvailability",
+            "MixinWaterBoundaryHeight",
             "MixinActiveRenderInfo",
             "MixinChunk",
             "MixinEntityRenderer",
@@ -42,7 +45,8 @@ public enum Mixins implements IMixins
     CLIENT_ANGELICA_GENERIC_SHADER(
         new MixinBuilder().setPhase(Phase.EARLY)
         .addRequiredMod(TargetedMod.ANGELICA)
-        .addClientMixins("MixinIrisGenericRenderProgram", "MixinFoliageTransformPatcher", "MixinFoliageLodRenderProgram")),
+        .addClientMixins("MixinIrisGenericRenderProgram", "MixinFoliageTransformPatcher", "MixinFoliageLodRenderProgram",
+            "MixinClonedChunkAvailability", "MixinWorldSliceAvailability")),
 
     CLIENT_FADE(
 		new MixinBuilder().setPhase(Phase.EARLY)

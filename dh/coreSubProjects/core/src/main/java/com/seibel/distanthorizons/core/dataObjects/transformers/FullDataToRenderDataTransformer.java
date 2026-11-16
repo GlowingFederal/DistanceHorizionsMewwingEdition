@@ -202,7 +202,7 @@ public class FullDataToRenderDataTransformer
 		if (columnSource != null 
 			&& columnSource.hasTextureSetIds())
 		{
-			applyTextureSetIds(fullDataSource, columnArrayView, fullDataColumn, columnSource, sourceRelX, sourceRelZ);
+			applyTextureSetIds(levelWrapper, fullDataSource, columnArrayView, fullDataColumn, columnSource, sourceRelX, sourceRelZ);
 		}
 	}
 	
@@ -216,7 +216,7 @@ public class FullDataToRenderDataTransformer
 	 * how the data points were merged along the way.
 	 */
 	private static void applyTextureSetIds(
-			FullDataSourceV2 fullDataSource, ColumnRenderView renderColumnData, LongArrayList fullDataColumn,
+			IClientLevelWrapper levelWrapper, FullDataSourceV2 fullDataSource, ColumnRenderView renderColumnData, LongArrayList fullDataColumn,
 			ColumnRenderSource columnSource, int sourceRelX, int sourceRelZ)
 	{
 		for (int renderIndex = 0; renderIndex < renderColumnData.size; renderIndex++)
@@ -248,6 +248,11 @@ public class FullDataToRenderDataTransformer
 					try
 					{
 						IBlockStateWrapper block = fullDataSource.mapping.getBlockStateWrapper(FullDataPointUtil.getId(fullData));
+						// Terrain reduction already separated UAB's plant from its water.
+						// Its water surface needs the same canonical texture as its color
+						// and material, rather than the kelp/coral cutout's alpha mask.
+						if (materialId == EDhApiBlockMaterial.WATER.index && block.containsLodWater())
+							block = WRAPPER_FACTORY.getWaterBlockStateWrapper(levelWrapper);
 						
 						// If this render data is snow, but the block ID doesn't match,
 						// try getting the block above it.

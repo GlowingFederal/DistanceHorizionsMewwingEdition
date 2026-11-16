@@ -6,6 +6,8 @@ in vec3 vertexWorldPos;
 in vec3 vBlockPos;
 flat in uint vNormalIndex;
 flat in uint vTextureTileId;
+flat in uint vBlockMaterial;
+flat in vec2 vCoverageJitter;
 in vec4 gl_FragCoord;
 
 out vec4 fragColor;
@@ -20,6 +22,7 @@ out vec4 fragColor;
 
 // Fade/Clip Uniforms
 uniform float uClipDistance = 0.0;
+uniform bool uLegacyWaterAppearance = false;
 
 // Noise Uniforms
 uniform bool uNoiseEnabled;
@@ -43,9 +46,8 @@ vec3 quantize(vec3 val, int stepSize)
     return floor(val * stepSize) / stepSize;
 }
 
-void applyNoise(inout vec4 fragColor, const in float viewDist)
+void applyNoise(inout vec4 fragColor, const in float viewDist, vec3 vertexNormal)
 {
-    vec3 vertexNormal = normalize(cross(dFdy(vPos.xyz), dFdx(vPos.xyz)));
     // This bit of code is required to fix the vertex position problem cus of floats in the verted world position varuable
     vec3 fixedVPos = vPos.xyz + vertexNormal * 0.001;
 
@@ -96,7 +98,13 @@ float bayerMatrix4x4(vec2 st)
 
 void main()
 {
-    dhc_clip(vertexWorldPos);
+    // Derivatives after a divergent discard are undefined. In particular, the
+    // owned half of a quad must remain available when calculating texture LOD;
+    // otherwise the surviving water samples unrelated/empty atlas mip texels.
+    vec2 unwrappedUv = dhf_faceUv(vBlockPos, vNormalIndex) * 16.0;
+    vec2 textureDx = dFdx(unwrappedUv), textureDy = dFdy(unwrappedUv);
+    vec3 noiseNormal = normalize(cross(dFdy(vPos.xyz), dFdx(vPos.xyz)));
+    dhc_clip(vertexWorldPos, vCoverageJitter);
     dhp_present();
     fragColor = vertexColor;
     float viewDist = length(vertexWorldPos);
@@ -105,13 +113,25 @@ void main()
     {
         // tile id -> grid cell -> exact texel.
         // texture() allow us to use mipmaps
-        vec4 tile = dhf_sample(vBlockPos, vNormalIndex, vTextureTileId, viewDist);
+        vec4 tile = dhf_sample(vBlockPos, vNormalIndex, vTextureTileId, viewDist, textureDx, textureDy);
         
         // The tile's color ratio preserves the LOD's original tint and shading.
         // Tile color value of gray, 128 (half way between 0 and 255)
         // means the LOD will use it's base color.
         vec3 clampedColor = clamp(fragColor.rgb * (tile.rgb * 2.0), 0.0, 1.0);
-        fragColor.rgb = mix(fragColor.rgb, clampedColor, tile.a);
+        if (uLegacyWaterAppearance && vBlockMaterial == 12u && vertexColor.a < 1.0 && dhf_Enabled)
+        {
+            // Water texture alpha is optical opacity, not a mask for how much
+            // RGB texture to apply. Restore its full precision instead of the
+            // four-bit alpha in compressed LOD columns. Keep over-void water
+            // opaque, and leave cutouts, other materials and shader packs alone.
+            fragColor.rgb = clampedColor;
+            fragColor.a = tile.a;
+        }
+        else
+        {
+            fragColor.rgb = mix(fragColor.rgb, clampedColor, tile.a);
+        }
     }
     
     
@@ -146,6 +166,6 @@ void main()
         // textured blocks don't need the fake texturing
         && vTextureTileId == 0u)
     {
-        applyNoise(fragColor, viewDist);
+        applyNoise(fragColor, viewDist, noiseNormal);
     }
 }

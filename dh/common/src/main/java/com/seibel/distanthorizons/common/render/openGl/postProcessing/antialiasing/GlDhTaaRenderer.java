@@ -84,6 +84,7 @@ public class GlDhTaaRenderer implements IDhApiAntiAliasRenderer
 	
 	private void createFramebuffer(int width, int height)
 	{
+		GlDhTaaShader.INSTANCE.resetHistory();
 		if (this.framebufferA != -1)
 		{
 			LWJGL.glDeleteFramebuffers(this.framebufferA);
@@ -200,6 +201,7 @@ public class GlDhTaaRenderer implements IDhApiAntiAliasRenderer
 	
 	public void free()
 	{
+		GlDhTaaShader.INSTANCE.resetHistory();
 		GlDhTaaShader.INSTANCE.free();
 		GlDhTaaSharpenShader.INSTANCE.free();
 	}

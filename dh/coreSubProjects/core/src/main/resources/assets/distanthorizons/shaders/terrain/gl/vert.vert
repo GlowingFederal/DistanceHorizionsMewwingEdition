@@ -13,6 +13,8 @@ out float vertexYPos;
 out vec3 vBlockPos;
 flat out uint vNormalIndex;
 flat out uint vTextureTileId;
+flat out uint vBlockMaterial;
+flat out vec2 vCoverageJitter;
 
 uniform bool uIsWhiteWorld;
 
@@ -65,6 +67,8 @@ void main()
     vBlockPos = vec3(vPosition.xyz);
     vNormalIndex = irisData.y;
     vTextureTileId = irisData.z | (irisData.w << 8u);
+    vBlockMaterial = irisData.x;
+    vCoverageJitter = vec2(0.0);
     
     vertexWorldPos = vPosition.xyz + uModelOffset;
     
@@ -122,5 +126,8 @@ void main()
     {
         // jittering the model around is necessary to smooth out TAA properly
         gl_Position.xy = TAAJitter(gl_Position.xy, gl_Position.w);
+        // NDC displacement becomes half as many window pixels. Native chunk
+        // geometry is not jittered; its ownership boundary must stay fixed.
+        vCoverageJitter = jitterOffsets[int(uFrameMod8)] * 0.5;
     }
 }

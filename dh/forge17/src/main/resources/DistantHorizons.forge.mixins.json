@@ -13,6 +13,11 @@
   ],
   "client": [
     "IMixinChunkCache_SideFacingUnloaded",
+    "MixinChunkCacheAvailability",
+    "MixinContainedWaterAvailability",
+    "MixinWaterBoundaryHeight",
+    "MixinClonedChunkAvailability",
+    "MixinWorldSliceAvailability",
     "MixinActiveRenderInfo",
     "MixinBlock_SideFacingUnloadedChunk",
     "MixinEntityRenderer",
