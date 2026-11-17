@@ -83,3 +83,8 @@
 - Assign canonical water textures to the water retained inside UAB kelp, seagrass, coral, sea pickles and bubble columns. Keep plant cutout textures on their separate vegetation geometry; cutout alpha no longer punches holes in the water at surface-reaching plants.
 - Calculate ownership normals from the original interpolated position instead of taking undefined nested derivatives of jitter-corrected positions. Calculate untextured noise normals before clipping as well, preserving the existing appearance while removing undefined calculations at clipped structure edges.
 - Stabilize stationary 1.7.10 temporal anti-aliasing on distant thin edges by retaining more history, while preserving the motion-based reduction in history weight. Reject newly allocated or reset history buffers for their first frame. Keep anti-aliasing enabled, preserve other targets' existing accumulation weight, and leave shader packs' own anti-aliasing unchanged.
+
+2026-11-16 20:49 — Preserve distant water color and opacity in atlas mipmaps
+
+- Stop the OpenGL block atlas mip chain at one texel per 16×16 block tile, including after atlas growth. Coarser levels mixed water with unrelated tiles and unused atlas space, making water progressively darker at shallow viewing angles after the native water-opacity repair.
+- Package the native Forge 1.7.10 repair as 1.0.5. Preserve the water-boundary height correction, contained-water textures, section ownership, temporal anti-aliasing, shader-pack integration, configuration and saved-data formats.
